@@ -19,6 +19,7 @@
 #include "library/trackcollection.h"
 #include "library/trackcollectionmanager.h"
 #include "library/treeitem.h"
+#include "mixer/playerinfo.h"
 #include "moc_rekordboxfeature.cpp"
 #include "track/beats.h"
 #include "track/cue.h"
@@ -27,6 +28,7 @@
 #include "util/color/color.h"
 #include "util/db/dbconnectionpooled.h"
 #include "util/db/dbconnectionpooler.h"
+#include "util/db/sqlstringformatter.h"
 #include "util/sandbox.h"
 #include "waveform/waveform.h"
 #include "widget/wlibrary.h"
@@ -96,6 +98,8 @@ bool createLibraryTable(QSqlDatabase& database, const QString& tableName) {
             "    rating INTEGER,"
             "    analyze_path TEXT,"
             "    device TEXT,"
+            "    played INTEGER NOT NULL DEFAULT 0,"
+            "    timesplayed INTEGER NOT NULL DEFAULT 0,"
             "    color INTEGER"
             ");");
 
@@ -1308,6 +1312,15 @@ TrackPointer RekordboxPlaylistModel::getTrack(const QModelIndex& index) const {
     return track;
 }
 
+Qt::ItemFlags RekordboxPlaylistModel::flags(const QModelIndex& index) const {
+    const int column = index.column();
+    if (column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_PLAYED) ||
+            column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_TIMESPLAYED)) {
+        return readWriteFlags(index);
+    }
+    return BaseExternalPlaylistModel::flags(index);
+}
+
 bool RekordboxPlaylistModel::isColumnHiddenByDefault(int column) {
     if (column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_BITRATE)) {
         return true;
@@ -1316,7 +1329,8 @@ bool RekordboxPlaylistModel::isColumnHiddenByDefault(int column) {
 }
 
 bool RekordboxPlaylistModel::isColumnInternal(int column) {
-    return column == fieldIndex(ColumnCache::COLUMN_REKORDBOX_ANALYZE_PATH) ||
+    return column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_PLAYED) ||
+            column == fieldIndex(ColumnCache::COLUMN_REKORDBOX_ANALYZE_PATH) ||
             BaseExternalPlaylistModel::isColumnInternal(column);
 }
 
@@ -1329,6 +1343,10 @@ RekordboxFeature::RekordboxFeature(
     QString idColumn = LIBRARYTABLE_ID;
     QStringList columns = {
             LIBRARYTABLE_ID,
+            // Keep these near the front like the main library cache so the
+            // played checkbox column is exposed correctly.
+            LIBRARYTABLE_PLAYED,
+            LIBRARYTABLE_TIMESPLAYED,
             LIBRARYTABLE_ARTIST,
             LIBRARYTABLE_TITLE,
             LIBRARYTABLE_ALBUM,
@@ -1495,6 +1513,345 @@ QString RekordboxFeature::formatRootViewHtml() const {
 void RekordboxFeature::refreshLibraryModels() {
 }
 
+bool RekordboxFeature::hasLoadedRekordboxTracks() const {
+    QSqlDatabase database = m_pTrackCollection->database();
+    QSqlQuery query(database);
+    query.prepare(QStringLiteral("SELECT 1 FROM %1 LIMIT 1")
+                          .arg(kRekordboxLibraryTable));
+    if (!query.exec()) {
+        LOG_FAILED_QUERY(query);
+        return false;
+    }
+    return query.next();
+}
+
+QSet<TrackId> RekordboxFeature::getAllRekordboxTrackIds() const {
+    QSet<TrackId> rekordboxTrackIds;
+
+    QSqlDatabase database = m_pTrackCollection->database();
+    QSqlQuery selectQuery(database);
+    selectQuery.prepare(QStringLiteral(
+            "SELECT id FROM %1")
+                                .arg(kRekordboxLibraryTable));
+    if (!selectQuery.exec()) {
+        LOG_FAILED_QUERY(selectQuery);
+        return rekordboxTrackIds;
+    }
+
+    while (selectQuery.next()) {
+        const QVariant rekordboxTrackIdValue = selectQuery.value(0);
+        const TrackId rekordboxTrackId(rekordboxTrackIdValue);
+        rekordboxTrackIds.insert(rekordboxTrackId);
+    }
+
+    return rekordboxTrackIds;
+}
+
+QSet<TrackId> RekordboxFeature::getRekordboxTrackIdsForLocations(
+        const QSet<QString>& locations) const {
+    QSet<TrackId> rekordboxTrackIds;
+    if (locations.isEmpty()) {
+        return rekordboxTrackIds;
+    }
+
+    QSqlDatabase database = m_pTrackCollection->database();
+    QSqlQuery selectQuery(database);
+    selectQuery.prepare(QStringLiteral(
+            "SELECT id FROM %1 WHERE location IN (%2)")
+                                .arg(kRekordboxLibraryTable,
+                                        SqlStringFormatter::formatList(database, locations)));
+    if (!selectQuery.exec()) {
+        LOG_FAILED_QUERY(selectQuery);
+        return rekordboxTrackIds;
+    }
+
+    while (selectQuery.next()) {
+        rekordboxTrackIds.insert(TrackId(selectQuery.value(0)));
+    }
+
+    return rekordboxTrackIds;
+}
+
+QSet<QString> RekordboxFeature::getRekordboxLocations(const QSet<QString>& locations) const {
+    QSet<QString> matchedLocations;
+    if (locations.isEmpty()) {
+        return matchedLocations;
+    }
+
+    QSqlDatabase database = m_pTrackCollection->database();
+    QSqlQuery selectQuery(database);
+    selectQuery.prepare(QStringLiteral(
+            "SELECT DISTINCT location FROM %1 WHERE location IN (%2)")
+                                .arg(kRekordboxLibraryTable,
+                                        SqlStringFormatter::formatList(database, locations)));
+    if (!selectQuery.exec()) {
+        LOG_FAILED_QUERY(selectQuery);
+        return matchedLocations;
+    }
+
+    while (selectQuery.next()) {
+        matchedLocations.insert(selectQuery.value(0).toString());
+    }
+
+    return matchedLocations;
+}
+
+void RekordboxFeature::refreshMatchedTrackLocations() {
+    m_rekordboxLocationByLibraryTrackId.clear();
+    if (!m_playedStateSyncConnected) {
+        return;
+    }
+
+    QSqlDatabase database = m_pTrackCollection->database();
+    QSqlQuery selectQuery(database);
+    selectQuery.prepare(QStringLiteral(
+            "SELECT DISTINCT library.id, track_locations.location "
+            "FROM %1 library "
+            "INNER JOIN %2 track_locations "
+            "        ON library.location = track_locations.id "
+            "INNER JOIN %3 rekordbox_library "
+            "        ON rekordbox_library.location = track_locations.location")
+                                .arg(QStringLiteral(LIBRARY_TABLE),
+                                        QStringLiteral(TRACKLOCATIONS_TABLE),
+                                        kRekordboxLibraryTable));
+    if (!selectQuery.exec()) {
+        LOG_FAILED_QUERY(selectQuery);
+        return;
+    }
+
+    while (selectQuery.next()) {
+        const TrackId trackId(selectQuery.value(0));
+        if (!trackId.isValid()) {
+            continue;
+        }
+        m_rekordboxLocationByLibraryTrackId.insert(trackId, selectQuery.value(1).toString());
+    }
+}
+
+void RekordboxFeature::updatePlayedStateSyncConnections() {
+    const bool shouldBeConnected = hasLoadedRekordboxTracks();
+    if (shouldBeConnected == m_playedStateSyncConnected) {
+        return;
+    }
+
+    TrackDAO& trackDao = m_pTrackCollection->getTrackDAO();
+    if (shouldBeConnected) {
+        connect(&trackDao,
+                &TrackDAO::tracksAdded,
+                this,
+                &RekordboxFeature::slotTracksAddedOrChanged);
+        connect(&trackDao,
+                &TrackDAO::tracksChanged,
+                this,
+                &RekordboxFeature::slotTracksAddedOrChanged);
+        connect(&trackDao,
+                &TrackDAO::tracksRemoved,
+                this,
+                &RekordboxFeature::slotTracksRemoved);
+        connect(&PlayerInfo::instance(),
+                &PlayerInfo::currentPlayingTrackChanged,
+                this,
+                &RekordboxFeature::slotCurrentPlayingTrackChanged,
+                Qt::QueuedConnection);
+    } else {
+        disconnect(&trackDao,
+                &TrackDAO::tracksAdded,
+                this,
+                &RekordboxFeature::slotTracksAddedOrChanged);
+        disconnect(&trackDao,
+                &TrackDAO::tracksChanged,
+                this,
+                &RekordboxFeature::slotTracksAddedOrChanged);
+        disconnect(&trackDao,
+                &TrackDAO::tracksRemoved,
+                this,
+                &RekordboxFeature::slotTracksRemoved);
+        disconnect(&PlayerInfo::instance(),
+                &PlayerInfo::currentPlayingTrackChanged,
+                this,
+                &RekordboxFeature::slotCurrentPlayingTrackChanged);
+        m_rekordboxLocationByLibraryTrackId.clear();
+    }
+    m_playedStateSyncConnected = shouldBeConnected;
+}
+
+QSet<TrackId> RekordboxFeature::syncPlayedStateForAllTracks() {
+    if (!m_playedStateSyncConnected) {
+        m_rekordboxLocationByLibraryTrackId.clear();
+        return {};
+    }
+
+    QSqlDatabase database = m_pTrackCollection->database();
+    QSqlQuery updateQuery(database);
+    updateQuery.prepare(QStringLiteral(
+            "UPDATE %1 "
+            "SET played=COALESCE(("
+            "        SELECT library.played "
+            "        FROM %2 library "
+            "        INNER JOIN %3 track_locations "
+            "                ON library.location = track_locations.id "
+            "        WHERE track_locations.location = %1.location"
+            "    ), 0), "
+            "    timesplayed=COALESCE(("
+            "        SELECT library.timesplayed "
+            "        FROM %2 library "
+            "        INNER JOIN %3 track_locations "
+            "                ON library.location = track_locations.id "
+            "        WHERE track_locations.location = %1.location"
+            "    ), 0)")
+                                .arg(kRekordboxLibraryTable,
+                                        QStringLiteral(LIBRARY_TABLE),
+                                        QStringLiteral(TRACKLOCATIONS_TABLE)));
+    if (!updateQuery.exec()) {
+        LOG_FAILED_QUERY(updateQuery);
+        return {};
+    }
+
+    refreshMatchedTrackLocations();
+    return getAllRekordboxTrackIds();
+}
+
+QSet<TrackId> RekordboxFeature::syncPlayedStateForTracks(const QSet<TrackId>& trackIds) {
+    QSet<TrackId> rekordboxTrackIds;
+    if (trackIds.isEmpty() || !m_playedStateSyncConnected) {
+        return rekordboxTrackIds;
+    }
+
+    QSet<QString> previousLocations;
+    QHash<QString, PlayCounter> playCounterByLocation;
+    for (const auto& trackId : trackIds) {
+        auto it = m_rekordboxLocationByLibraryTrackId.constFind(trackId);
+        if (it != m_rekordboxLocationByLibraryTrackId.constEnd()) {
+            previousLocations.insert(it.value());
+        }
+        m_rekordboxLocationByLibraryTrackId.remove(trackId);
+
+        const TrackPointer pTrack =
+                m_pLibrary->trackCollectionManager()->getTrackById(trackId);
+        if (!pTrack) {
+            continue;
+        }
+
+        const QString location = pTrack->getLocation();
+        if (location.isEmpty()) {
+            continue;
+        }
+        playCounterByLocation.insert(location, pTrack->getPlayCounter());
+    }
+
+    QSet<QString> candidateLocations;
+    candidateLocations.reserve(playCounterByLocation.size());
+    for (auto it = playCounterByLocation.cbegin(); it != playCounterByLocation.cend(); ++it) {
+        candidateLocations.insert(it.key());
+    }
+
+    const QSet<QString> currentLocations = getRekordboxLocations(candidateLocations);
+    if (!currentLocations.isEmpty()) {
+        QSqlDatabase database = m_pTrackCollection->database();
+        QSqlQuery updateQuery(database);
+        QStringList playedCases;
+        QStringList timesPlayedCases;
+        playedCases.reserve(currentLocations.size());
+        timesPlayedCases.reserve(currentLocations.size());
+        for (const auto& location : currentLocations) {
+            const auto playCounter = playCounterByLocation.value(location);
+            playedCases.append(QStringLiteral("WHEN %1 THEN %2")
+                                       .arg(SqlStringFormatter::format(database, location),
+                                               playCounter.isPlayed() ? QStringLiteral("1")
+                                                                      : QStringLiteral("0")));
+            timesPlayedCases.append(QStringLiteral("WHEN %1 THEN %2")
+                                            .arg(SqlStringFormatter::format(database, location),
+                                                    QString::number(playCounter.getTimesPlayed())));
+        }
+        updateQuery.prepare(QStringLiteral(
+                "UPDATE %1 "
+                "SET played=CASE location %2 END, "
+                "    timesplayed=CASE location %3 END "
+                "WHERE location IN (%4)")
+                                    .arg(kRekordboxLibraryTable,
+                                            playedCases.join(' '),
+                                            timesPlayedCases.join(' '),
+                                            SqlStringFormatter::formatList(database, currentLocations)));
+        if (!updateQuery.exec()) {
+            LOG_FAILED_QUERY(updateQuery);
+            return rekordboxTrackIds;
+        }
+
+        for (const auto& trackId : trackIds) {
+            const TrackPointer pTrack =
+                    m_pLibrary->trackCollectionManager()->getTrackById(trackId);
+            if (!pTrack) {
+                continue;
+            }
+            const QString location = pTrack->getLocation();
+            if (currentLocations.contains(location)) {
+                m_rekordboxLocationByLibraryTrackId.insert(trackId, location);
+            }
+        }
+        rekordboxTrackIds.unite(getRekordboxTrackIdsForLocations(currentLocations));
+    }
+
+    previousLocations.subtract(currentLocations);
+    rekordboxTrackIds.unite(resetPlayedStateForLocations(previousLocations));
+    return rekordboxTrackIds;
+}
+
+QSet<TrackId> RekordboxFeature::resetPlayedStateForLocations(
+        const QSet<QString>& locations) {
+    if (locations.isEmpty()) {
+        return {};
+    }
+
+    QSqlDatabase database = m_pTrackCollection->database();
+    QSqlQuery updateQuery(database);
+    updateQuery.prepare(QStringLiteral(
+            "UPDATE %1 "
+            "SET played=0, timesplayed=0 "
+            "WHERE location IN (%2)")
+                                .arg(kRekordboxLibraryTable,
+                                        SqlStringFormatter::formatList(database, locations)));
+    if (!updateQuery.exec()) {
+        LOG_FAILED_QUERY(updateQuery);
+        return {};
+    }
+
+    return getRekordboxTrackIdsForLocations(locations);
+}
+
+void RekordboxFeature::refreshPlayedState(const QSet<TrackId>& rekordboxTrackIds) {
+    if (!m_trackSource || rekordboxTrackIds.isEmpty()) {
+        return;
+    }
+    m_trackSource->slotTracksAddedOrChanged(rekordboxTrackIds);
+}
+
+void RekordboxFeature::slotTracksAddedOrChanged(const QSet<TrackId>& trackIds) {
+    if (!m_playedStateSyncConnected) {
+        return;
+    }
+    refreshPlayedState(syncPlayedStateForTracks(trackIds));
+}
+
+void RekordboxFeature::slotTracksRemoved(const QSet<TrackId>& trackIds) {
+    if (!m_playedStateSyncConnected) {
+        return;
+    }
+    refreshPlayedState(syncPlayedStateForTracks(trackIds));
+}
+
+void RekordboxFeature::slotCurrentPlayingTrackChanged(const TrackPointer& pTrack) {
+    if (!m_playedStateSyncConnected || !pTrack) {
+        return;
+    }
+
+    const TrackId trackId = pTrack->getId();
+    if (!trackId.isValid()) {
+        return;
+    }
+
+    slotTracksAddedOrChanged(QSet<TrackId>{trackId});
+}
+
 void RekordboxFeature::activate() {
     qDebug() << "RekordboxFeature::activate()";
 
@@ -1623,6 +1980,11 @@ void RekordboxFeature::onRekordboxDevicesFound() {
         }
     }
 
+    updatePlayedStateSyncConnections();
+    if (m_playedStateSyncConnected) {
+        refreshMatchedTrackLocations();
+    }
+
     // calls a slot in the sidebarmodel such that 'isLoading' is removed from the feature title.
     m_title = tr("Rekordbox");
     emit featureLoadingFinished(this);
@@ -1642,6 +2004,8 @@ void RekordboxFeature::onTracksFound() {
 
     qDebug() << "Show Rekordbox Device Playlist: " << devicePlaylist;
 
+    updatePlayedStateSyncConnections();
+    refreshPlayedState(syncPlayedStateForAllTracks());
     m_pRekordboxPlaylistModel->setPlaylist(devicePlaylist);
     emit showTrackModel(m_pRekordboxPlaylistModel);
 }

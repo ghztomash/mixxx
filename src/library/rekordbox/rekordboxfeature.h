@@ -26,6 +26,8 @@
 
 #include <QFuture>
 #include <QFutureWatcher>
+#include <QHash>
+#include <QSet>
 #include <QStringListModel>
 #include <QtConcurrentRun>
 #include <fstream>
@@ -34,6 +36,7 @@
 #include "library/baseexternalplaylistmodel.h"
 #include "library/baseexternaltrackmodel.h"
 #include "library/treeitemmodel.h"
+#include "track/trackid.h"
 #include "util/parented_ptr.h"
 
 class TrackCollectionManager;
@@ -46,6 +49,7 @@ class RekordboxPlaylistModel : public BaseExternalPlaylistModel {
             TrackCollectionManager* pTrackCollectionManager,
             QSharedPointer<BaseTrackCache> trackSource);
     TrackPointer getTrack(const QModelIndex& index) const override;
+    Qt::ItemFlags flags(const QModelIndex& index) const override;
     bool isColumnHiddenByDefault(int column) override;
     bool isColumnInternal(int column) override;
 
@@ -77,6 +81,21 @@ class RekordboxFeature : public BaseExternalLibraryFeature {
     void htmlLinkClicked(const QUrl& link);
 
   private:
+    QSet<TrackId> getAllRekordboxTrackIds() const;
+    QSet<TrackId> getRekordboxTrackIdsForLocations(const QSet<QString>& locations) const;
+    QSet<QString> getRekordboxLocations(const QSet<QString>& locations) const;
+    bool hasLoadedRekordboxTracks() const;
+    QSet<TrackId> syncPlayedStateForAllTracks();
+    QSet<TrackId> syncPlayedStateForTracks(const QSet<TrackId>& trackIds);
+    QSet<TrackId> resetPlayedStateForLocations(const QSet<QString>& locations);
+    void refreshPlayedState(const QSet<TrackId>& rekordboxTrackIds);
+    void refreshMatchedTrackLocations();
+    void updatePlayedStateSyncConnections();
+
+    void slotTracksAddedOrChanged(const QSet<TrackId>& trackIds);
+    void slotTracksRemoved(const QSet<TrackId>& trackIds);
+    void slotCurrentPlayingTrackChanged(const TrackPointer& pTrack);
+
     QString formatRootViewHtml() const;
     std::unique_ptr<BaseSqlTableModel> createPlaylistModelForPlaylist(
             const QVariant& data) override;
@@ -91,4 +110,6 @@ class RekordboxFeature : public BaseExternalLibraryFeature {
     QString m_title;
 
     QSharedPointer<BaseTrackCache> m_trackSource;
+    bool m_playedStateSyncConnected{false};
+    QHash<TrackId, QString> m_rekordboxLocationByLibraryTrackId;
 };
