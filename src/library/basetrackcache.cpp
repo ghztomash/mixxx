@@ -458,19 +458,51 @@ void BaseTrackCache::filterAndSort(const QSet<TrackId>& trackIds,
         return;
     }
 
-    if (!m_bIndexBuilt) {
-        buildIndex();
+    QStringList idStrings;
+    idStrings.reserve(trackIds.size());
+    for (const auto& trackId : trackIds) {
+        idStrings << trackId.toString();
     }
 
-    // The id string we need for our QSqlQuery
-    QStringList idStrings;
+    if (!m_bIndexBuilt) {
+        if (m_bIsCaching) {
+            buildIndex();
+        } else {
+            const QString preloadQuery = QString("SELECT %1 FROM %2 WHERE %3 in (%4)")
+                                                 .arg(m_columnsJoined,
+                                                         m_tableName,
+                                                         m_idColumn,
+                                                         idStrings.join(","));
+            if (!updateIndexWithQuery(preloadQuery)) {
+                qDebug() << "buildIndex failed!";
+            }
+            m_bIndexBuilt = true;
+        }
+    } else if (!m_bIsCaching) {
+        QStringList missingIdStrings;
+        for (const auto& trackId : trackIds) {
+            if (!m_trackInfo.contains(trackId)) {
+                missingIdStrings.append(trackId.toString());
+            }
+        }
+        if (!missingIdStrings.isEmpty()) {
+            const QString preloadQuery = QString("SELECT %1 FROM %2 WHERE %3 in (%4)")
+                                                 .arg(m_columnsJoined,
+                                                         m_tableName,
+                                                         m_idColumn,
+                                                         missingIdStrings.join(","));
+            if (!updateIndexWithQuery(preloadQuery)) {
+                qDebug() << "updateTracksInIndex failed!";
+            }
+        }
+    }
+
     // The id set we need for removing/adding dirty tracks
     QSet<TrackId> ids;
     // TODO(rryan) consider making this the data passed in and a separate
     // QVector for output
     QSet<TrackId> dirtyTracks;
     for (const auto& trackId : trackIds) {
-        idStrings << trackId.toString();
         ids << trackId;
         if (m_dirtyTracks.contains(trackId)) {
             dirtyTracks.insert(trackId);
@@ -493,8 +525,12 @@ void BaseTrackCache::filterAndSort(const QSet<TrackId>& trackIds,
             m_pQueryParser->parseQuery(searchPlusExtraFilter, QString());
 
     QString filter = pQuery->toSql();
+    const QString idFilter = QString("%1 IN (%2)")
+                                     .arg(m_idColumn, idStrings.join(","));
     if (!filter.isEmpty()) {
-        filter.prepend("WHERE ");
+        filter = QString("WHERE (%1) AND %2").arg(filter, idFilter);
+    } else {
+        filter = QString("WHERE %1").arg(idFilter);
     }
 
     QString queryString = QString("SELECT %1 FROM %2 %3 %4")
