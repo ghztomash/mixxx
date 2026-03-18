@@ -29,6 +29,7 @@
 #include <QHash>
 #include <QSet>
 #include <QStringListModel>
+#include <QVector>
 #include <QtConcurrentRun>
 #include <fstream>
 
@@ -41,6 +42,8 @@
 
 class TrackCollectionManager;
 class BaseExternalPlaylistModel;
+class QAbstractItemDelegate;
+class WTrackTableView;
 
 class RekordboxPlaylistModel : public BaseExternalPlaylistModel {
     Q_OBJECT
@@ -48,13 +51,26 @@ class RekordboxPlaylistModel : public BaseExternalPlaylistModel {
     RekordboxPlaylistModel(QObject* parent,
             TrackCollectionManager* pTrackCollectionManager,
             QSharedPointer<BaseTrackCache> trackSource);
+    /// Return the Rekordbox ANLZ path for a table row.
+    QString getAnalyzePath(const QModelIndex& index) const;
+    /// Return all visible rows that reference the same Rekordbox ANLZ path.
+    QVector<int> getAnalyzePathRows(const QString& analyzePath) const;
     TrackPointer getTrack(const QModelIndex& index) const override;
     Qt::ItemFlags flags(const QModelIndex& index) const override;
     bool isColumnHiddenByDefault(int column) override;
     bool isColumnInternal(int column) override;
+    void select() override;
 
   protected:
+    QAbstractItemDelegate* delegateForSpecialColumn(
+            int column,
+            WTrackTableView* pTableView) override;
     void initSortColumnMapping() override;
+
+  private:
+    void rebuildAnalyzePathRowIndex();
+
+    QHash<QString, QVector<int>> m_rowsByAnalyzePath;
 };
 
 class RekordboxFeature : public BaseExternalLibraryFeature {

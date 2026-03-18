@@ -16,6 +16,7 @@
 #include "library/library.h"
 #include "library/queryutil.h"
 #include "library/rekordbox/rekordboxconstants.h"
+#include "library/rekordbox/rekordboxoverviewdelegate.h"
 #include "library/trackcollection.h"
 #include "library/trackcollectionmanager.h"
 #include "library/treeitem.h"
@@ -32,7 +33,9 @@
 #include "util/sandbox.h"
 #include "waveform/waveform.h"
 #include "widget/wlibrary.h"
+#include "widget/wlibrarytableview.h"
 #include "widget/wlibrarytextbrowser.h"
+#include "widget/wtracktableview.h"
 
 #define IS_RECORDBOX_DEVICE "::isRecordboxDevice::"
 #define IS_NOT_RECORDBOX_DEVICE "::isNotRecordboxDevice::"
@@ -96,6 +99,7 @@ bool createLibraryTable(QSqlDatabase& database, const QString& tableName) {
             "    bpm FLOAT,"
             "    key TEXT,"
             "    rating INTEGER,"
+            "    wavesummaryhex BLOB,"
             "    analyze_path TEXT,"
             "    device TEXT,"
             "    played INTEGER NOT NULL DEFAULT 0,"
@@ -481,14 +485,14 @@ QString parseDeviceDB(mixxx::DbConnectionPoolPtr dbConnectionPool, TreeItem* dev
     const mixxx::DbConnectionPooler dbConnectionPooler(dbConnectionPool);
     QSqlDatabase database = mixxx::DbConnectionPooled(dbConnectionPool);
 
-    //Open the database connection in this thread.
+    // Open the database connection in this thread.
     VERIFY_OR_DEBUG_ASSERT(database.isOpen()) {
         qDebug() << "Failed to open database for Rekordbox parser."
                  << database.lastError();
         return QString();
     }
 
-    //Give thread a low priority
+    // Give thread a low priority
     QThread* thisThread = QThread::currentThread();
     thisThread->setPriority(QThread::LowPriority);
 
@@ -1121,6 +1125,61 @@ RekordboxPlaylistModel::RekordboxPlaylistModel(QObject* parent,
                   trackSource) {
 }
 
+QString RekordboxPlaylistModel::getAnalyzePath(const QModelIndex& index) const {
+    return getFieldVariant(index, ColumnCache::COLUMN_REKORDBOX_ANALYZE_PATH)
+            .toString();
+}
+
+QVector<int> RekordboxPlaylistModel::getAnalyzePathRows(const QString& analyzePath) const {
+    return m_rowsByAnalyzePath.value(analyzePath);
+}
+
+void RekordboxPlaylistModel::select() {
+    BaseExternalPlaylistModel::select();
+    rebuildAnalyzePathRowIndex();
+}
+
+QAbstractItemDelegate* RekordboxPlaylistModel::delegateForSpecialColumn(
+        int column,
+        WTrackTableView* pTableView) {
+    if (column != fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_WAVESUMMARYHEX)) {
+        return nullptr;
+    }
+
+    auto* pOverviewDelegate =
+            new mixxx::rekordbox::OverviewDelegate(pTableView, this);
+    connect(pOverviewDelegate,
+            &mixxx::rekordbox::OverviewDelegate::overviewRowsChanged,
+            this,
+            [this](const QList<int>& rows) {
+                if (rows.isEmpty()) {
+                    return;
+                }
+                const int overviewColumn = fieldIndex(LIBRARYTABLE_WAVESUMMARYHEX);
+                VERIFY_OR_DEBUG_ASSERT(overviewColumn >= 0) {
+                    return;
+                }
+                emitDataChangedForMultipleRowsInColumn(rows, overviewColumn);
+            });
+    connect(pTableView,
+            &WLibraryTableView::onlyCachedCoversAndOverviews,
+            pOverviewDelegate,
+            &mixxx::rekordbox::OverviewDelegate::slotInhibitLazyLoading);
+    return pOverviewDelegate;
+}
+
+void RekordboxPlaylistModel::rebuildAnalyzePathRowIndex() {
+    m_rowsByAnalyzePath.clear();
+    for (int row = 0; row < rowCount(); ++row) {
+        const QString analyzePath =
+                getFieldVariant(index(row, 0), ColumnCache::COLUMN_REKORDBOX_ANALYZE_PATH)
+                        .toString();
+        if (!analyzePath.isEmpty()) {
+            m_rowsByAnalyzePath[analyzePath].append(row);
+        }
+    }
+}
+
 void RekordboxPlaylistModel::initSortColumnMapping() {
     // Add a bijective mapping between the SortColumnIds and column indices
     for (int i = 0; i < static_cast<int>(TrackModel::SortColumnId::IdMax); ++i) {
@@ -1360,6 +1419,7 @@ RekordboxFeature::RekordboxFeature(
             LIBRARYTABLE_BITRATE,
             LIBRARYTABLE_BPM,
             LIBRARYTABLE_KEY,
+            LIBRARYTABLE_WAVESUMMARYHEX,
             LIBRARYTABLE_COLOR,
             REKORDBOX_ANALYZE_PATH};
 
@@ -1502,9 +1562,9 @@ QString RekordboxFeature::formatRootViewHtml() const {
     }
     html.append(QString("</ul>"));
 
-    //Colorize links in lighter blue, instead of QT default dark blue.
-    //Links are still different from regular text, but readable on dark/light backgrounds.
-    //https://github.com/mixxxdj/mixxx/issues/9103
+    // Colorize links in lighter blue, instead of QT default dark blue.
+    // Links are still different from regular text, but readable on dark/light backgrounds.
+    // https://github.com/mixxxdj/mixxx/issues/9103
     html.append(QString("<a style=\"color:#0496FF;\" href=\"refresh\">%1</a>")
                         .arg(refreshLink));
     return html;
@@ -1859,7 +1919,7 @@ void RekordboxFeature::activate() {
     m_devicesFuture = QtConcurrent::run(findRekordboxDevices);
     m_devicesFutureWatcher.setFuture(m_devicesFuture);
     m_title = tr("(loading) Rekordbox");
-    //calls a slot in the sidebar model such that 'Rekordbox (isLoading)' is displayed.
+    // calls a slot in the sidebar model such that 'Rekordbox (isLoading)' is displayed.
     emit featureIsLoading(this, true);
 
     emit enableCoverArtDisplay(true);
@@ -1872,7 +1932,7 @@ void RekordboxFeature::activateChild(const QModelIndex& index) {
         return;
     }
 
-    //access underlying TreeItem object
+    // access underlying TreeItem object
     TreeItem* item = static_cast<TreeItem*>(index.internalPointer());
     if (!(item && item->getData().isValid())) {
         return;

@@ -399,6 +399,9 @@ QAbstractItemDelegate* BaseTrackTableModel::delegateForColumn(
             [this](QColor col) {
                 m_trackLoadedColor = col;
             });
+    if (auto* pDelegate = delegateForSpecialColumn(index, pTableView)) {
+        return pDelegate;
+    }
     if (index == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_RATING)) {
         return new StarDelegate(pTableView);
     } else if (index == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_BPM)) {

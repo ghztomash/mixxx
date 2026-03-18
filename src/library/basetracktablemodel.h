@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QAbstractItemDelegate>
 #include <QAbstractTableModel>
 #include <QHash>
 #include <QList>
@@ -13,6 +14,7 @@
 #include "util/datetime.h"
 
 class TrackCollectionManager;
+class WTrackTableView;
 
 /// Base class for tabular track list views.
 ///
@@ -150,6 +152,18 @@ class BaseTrackTableModel : public QAbstractTableModel, public TrackModel {
     static void setDateFormat(const QString& format);
 
   protected:
+    /// Create a model-specific delegate for a column.
+    ///
+    /// Returning `nullptr` falls back to the shared default delegate wiring in
+    /// `BaseTrackTableModel`.
+    virtual QAbstractItemDelegate* delegateForSpecialColumn(
+            int column,
+            WTrackTableView* pTableView) {
+        Q_UNUSED(column);
+        Q_UNUSED(pTableView);
+        return nullptr;
+    }
+
     // Build a map from the column names to their indices
     // used by fieldIndex().
     void initTableColumnsAndHeaderProperties(

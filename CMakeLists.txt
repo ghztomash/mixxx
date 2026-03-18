@@ -1445,6 +1445,10 @@ add_library(
   src/library/recording/dlgrecording.ui
   src/library/recording/recordingfeature.cpp
   src/library/rekordbox/rekordboxfeature.cpp
+  src/library/rekordbox/rekordboxoverviewcache.cpp
+  src/library/rekordbox/rekordboxoverviewdelegate.cpp
+  src/library/rekordbox/rekordboxoverviewrenderer.cpp
+  src/library/rekordbox/rekordboxwaveformpreview.cpp
   src/library/rhythmbox/rhythmboxfeature.cpp
   src/library/scanner/importfilestask.cpp
   src/library/scanner/libraryscanner.cpp
@@ -2915,6 +2919,7 @@ if(BUILD_TESTING)
     src/test/portmidicontroller_test.cpp
     src/test/portmidienumeratortest.cpp
     src/test/queryutiltest.cpp
+    src/test/rekordboxoverview_test.cpp
     src/test/rangelist_test.cpp
     src/test/readaheadmanager_test.cpp
     src/test/replaygaintest.cpp
