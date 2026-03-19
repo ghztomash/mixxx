@@ -47,6 +47,7 @@ void CrateTableModel::selectCrate(CrateId crateId) {
     QStringList columns;
     columns << LIBRARYTABLE_ID
             << "'' AS " + LIBRARYTABLE_PREVIEW
+            << "'' AS " + LIBRARYTABLE_LOADED_DECK
             // For sorting the cover art column we give LIBRARYTABLE_COVERART
             // the same value as the cover digest.
             << LIBRARYTABLE_COVERART_DIGEST + " AS " + LIBRARYTABLE_COVERART;
@@ -70,7 +71,8 @@ void CrateTableModel::selectCrate(CrateId crateId) {
 
     columns[0] = LIBRARYTABLE_ID;
     columns[1] = LIBRARYTABLE_PREVIEW;
-    columns[2] = LIBRARYTABLE_COVERART;
+    columns[2] = LIBRARYTABLE_LOADED_DECK;
+    columns[3] = LIBRARYTABLE_COVERART;
     setTable(tableName,
             LIBRARYTABLE_ID,
             columns,

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QHash>
 #include <QObject>
 #include <QString>
 
@@ -30,6 +31,7 @@ class BaseExternalPlaylistModel : public BaseSqlTableModel {
 
   protected:
     virtual QString resolveLocation(const QString& nativeLocation) const;
+    void updateTrackIdLookup() override;
 
   private:
     TrackId doGetTrackId(const TrackPointer& pTrack) const override;
@@ -39,4 +41,5 @@ class BaseExternalPlaylistModel : public BaseSqlTableModel {
     QSharedPointer<BaseTrackCache> m_trackSource;
     int m_currentPlaylistId;
     QHash<int, QString> m_searchTexts;
+    QHash<QString, TrackId> m_trackIdsByLocation;
 };

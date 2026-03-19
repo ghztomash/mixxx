@@ -7,6 +7,7 @@
 #include <QTextOption>
 #include <QWidgetAction>
 
+#include "library/dao/trackschema.h"
 #include "library/trackmodel.h"
 #include "moc_wtracktableviewheader.cpp"
 #include "util/math.h"
@@ -205,32 +206,36 @@ void WTrackTableViewHeader::setModel(QAbstractItemModel* pModel) {
     // * toggle a box with mouse click or Space on a selected box (via keyboard,
     //   not just hovered by mouse pointer)
     // * toggle and close by pressing Return on a selected box
-    int columns = pModel->columnCount();
-    for (int i = 0; i < columns; ++i) {
-        if (pTrackModel->isColumnInternal(i)) {
+    const int columns = pModel->columnCount();
+    int menuColumns = 0;
+    for (int visualIndex = 0; visualIndex < columns; ++visualIndex) {
+        const int logicalColumn = logicalIndex(visualIndex);
+        if (logicalColumn < 0 || pTrackModel->isColumnInternal(logicalColumn)) {
             continue;
         }
+        ++menuColumns;
 
-        const QString title = pModel->headerData(i, orientation()).toString();
+        const QString title = pModel->headerData(logicalColumn, orientation()).toString();
 
         // Custom QCheckBox with fixed hover behavior
         auto pCheckBox = make_parented<WMenuCheckBox>(title, &m_menu);
         // Keep a map of checkboxes and columns
-        m_columnCheckBoxes.insert(i, pCheckBox.get());
+        m_columnCheckBoxes.insert(logicalColumn, pCheckBox.get());
         connect(pCheckBox.get(),
                 &QCheckBox::toggled,
                 this,
-                [this, i] {
-                    showOrHideColumn(i);
+                [this, logicalColumn] {
+                    showOrHideColumn(logicalColumn);
                 });
         // If Mixxx starts the first time or the header states have been cleared
         // due to database schema evolution we gonna hide all columns that may
         // contain a potential large number of NULL values.  Here we uncheck
         // the items that are hidden by default (e.g., key column).
-        if (!hasPersistedHeaderState() && pTrackModel->isColumnHiddenByDefault(i)) {
+        if (!hasPersistedHeaderState() &&
+                pTrackModel->isColumnHiddenByDefault(logicalColumn)) {
             pCheckBox->setChecked(false);
         } else {
-            pCheckBox->setChecked(!isSectionHidden(i));
+            pCheckBox->setChecked(!isSectionHidden(logicalColumn));
         }
 
         auto pAction = make_parented<QWidgetAction>(this);
@@ -262,9 +267,9 @@ void WTrackTableViewHeader::setModel(QAbstractItemModel* pModel) {
 
     // Safety check against someone getting stuck with all columns hidden
     // (produces an empty library table). Just re-show them all.
-    if (hiddenCount() == columns) {
-        for (int i = 0; i < columns; ++i) {
-            showSection(i);
+    if (hiddenCount() == menuColumns) {
+        for (const auto logicalColumn : m_columnCheckBoxes.keys()) {
+            showSection(logicalColumn);
         }
     }
 }
@@ -314,6 +319,7 @@ void WTrackTableViewHeader::loadDefaultHeaderState() {
             resizeSection(i, header_size);
         }
     }
+    applyDefaultColumnOrder();
 }
 
 bool WTrackTableViewHeader::hasPersistedHeaderState() {
@@ -323,6 +329,40 @@ bool WTrackTableViewHeader::hasPersistedHeaderState() {
     }
     const QString headerStateString = pTrackModel->getModelSetting("header_state_pb");
     return !headerStateString.isNull();
+}
+
+void WTrackTableViewHeader::applyDefaultColumnOrder() {
+    auto* pTrackModel = getTrackModel();
+    if (!pTrackModel) {
+        return;
+    }
+
+    const int loadedDeckColumn = pTrackModel->fieldIndex(LIBRARYTABLE_LOADED_DECK);
+    if (loadedDeckColumn < 0) {
+        return;
+    }
+
+    const int loadedDeckVisualIndex = visualIndex(loadedDeckColumn);
+    if (loadedDeckVisualIndex < 0) {
+        return;
+    }
+
+    int targetVisualIndex = count() - 1;
+    const int overviewColumn = pTrackModel->fieldIndex(LIBRARYTABLE_WAVESUMMARYHEX);
+    if (overviewColumn >= 0) {
+        const int overviewVisualIndex = visualIndex(overviewColumn);
+        if (overviewVisualIndex >= 0) {
+            targetVisualIndex = (loadedDeckVisualIndex < overviewVisualIndex)
+                    ? overviewVisualIndex
+                    : overviewVisualIndex + 1;
+        }
+    }
+
+    if (targetVisualIndex < 0 || targetVisualIndex == loadedDeckVisualIndex) {
+        return;
+    }
+
+    moveSection(loadedDeckVisualIndex, targetVisualIndex);
 }
 
 void WTrackTableViewHeader::clearActions() {

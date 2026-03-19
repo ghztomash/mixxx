@@ -21,6 +21,7 @@ BaseExternalTrackModel::BaseExternalTrackModel(QObject* parent,
     QStringList columns;
     columns << "id";
     columns << "'' AS " + LIBRARYTABLE_PREVIEW;
+    columns << "'' AS " + LIBRARYTABLE_LOADED_DECK;
 
     QSqlQuery query(m_database);
     FieldEscaper f(m_database);
@@ -38,6 +39,7 @@ BaseExternalTrackModel::BaseExternalTrackModel(QObject* parent,
     }
 
     columns[1] = LIBRARYTABLE_PREVIEW;
+    columns[2] = LIBRARYTABLE_LOADED_DECK;
     setTable(viewTable, columns[0], columns, trackSource);
     setDefaultSort(fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_ARTIST), Qt::AscendingOrder);
 }
@@ -104,18 +106,29 @@ QString BaseExternalTrackModel::getTrackLocation(const QModelIndex& index) const
 
 TrackId BaseExternalTrackModel::doGetTrackId(const TrackPointer& pTrack) const {
     if (pTrack) {
-        // The external table has foreign Track IDs, so we need to compare
-        // by location
-        for (int row = 0; row < rowCount(); ++row) {
-            QString nativeLocation = getFieldString(index(row, 0),
-                    ColumnCache::COLUMN_TRACKLOCATIONSTABLE_LOCATION);
-            QString location = resolveLocation(nativeLocation);
-            if (location == pTrack->getLocation()) {
-                return TrackId(index(row, 0).data());
-            }
-        }
+        return m_trackIdsByLocation.value(pTrack->getLocation());
     }
     return TrackId();
+}
+
+void BaseExternalTrackModel::updateTrackIdLookup() {
+    m_trackIdsByLocation.clear();
+    m_trackIdsByLocation.reserve(rowCount());
+
+    for (int row = 0; row < rowCount(); ++row) {
+        const QModelIndex rowIndex = index(row, 0);
+        const QString nativeLocation = getFieldString(rowIndex,
+                ColumnCache::COLUMN_TRACKLOCATIONSTABLE_LOCATION);
+        const QString location = resolveLocation(nativeLocation);
+        if (location.isEmpty()) {
+            continue;
+        }
+        const TrackId trackId = rowIdentityTrackId(rowIndex);
+        if (!trackId.isValid()) {
+            continue;
+        }
+        m_trackIdsByLocation.insert(location, trackId);
+    }
 }
 
 bool BaseExternalTrackModel::isColumnInternal(int column) {

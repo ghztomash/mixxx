@@ -1,5 +1,9 @@
 #include <gtest/gtest.h>
 
+#include <QCoreApplication>
+#include <QElapsedTimer>
+#include <QFile>
+#include <QTemporaryFile>
 #include <QTest>
 #include <gsl/pointers>
 
@@ -11,6 +15,8 @@
 #include "engine/enginemixer.h"
 #include "library/coverartcache.h"
 #include "library/library.h"
+#include "library/librarytablemodel.h"
+#include "library/parsercsv.h"
 #include "library/trackcollectionmanager.h"
 #include "mixer/basetrackplayer.h"
 #include "mixer/deck.h"
@@ -40,6 +46,71 @@ void waitForTrackToBeLoaded(Deck* pDeck) {
     while (!pDeck->getEngineDeck()->getEngineBuffer()->isTrackLoaded()) {
         QTest::qSleep(100); // millis
     }
+}
+
+bool waitForTrackToBeLoadedWithTimeout(
+        Deck* pDeck,
+        int timeoutMillis = 5000) {
+    QElapsedTimer timer;
+    timer.start();
+    while (!pDeck->getEngineDeck()->getEngineBuffer()->isTrackLoaded()) {
+        if (timer.elapsed() >= timeoutMillis) {
+            return false;
+        }
+        QCoreApplication::processEvents();
+        QTest::qSleep(100); // millis
+    }
+    return true;
+}
+
+QString deckMarkerForTrack(
+        LibraryTableModel* pModel,
+        TrackId trackId,
+        int decksColumn) {
+    const auto rows = pModel->getTrackRows(trackId);
+    if (rows.isEmpty()) {
+        return {};
+    }
+    return pModel->data(pModel->index(rows.first(), decksColumn)).toString();
+}
+
+QString deckToolTipForTrack(
+        LibraryTableModel* pModel,
+        TrackId trackId,
+        int decksColumn) {
+    const auto rows = pModel->getTrackRows(trackId);
+    if (rows.isEmpty()) {
+        return {};
+    }
+    return pModel->data(pModel->index(rows.first(), decksColumn), Qt::ToolTipRole).toString();
+}
+
+bool waitForDeckMarker(
+        LibraryTableModel* pModel,
+        TrackId trackId,
+        int decksColumn,
+        const QString& expected) {
+    for (int i = 0; i < 50; ++i) {
+        QCoreApplication::processEvents();
+        if (deckMarkerForTrack(pModel, trackId, decksColumn) == expected) {
+            return true;
+        }
+        QTest::qSleep(20);
+    }
+    return false;
+}
+
+bool waitForTrackRow(
+        LibraryTableModel* pModel,
+        TrackId trackId) {
+    for (int i = 0; i < 50; ++i) {
+        QCoreApplication::processEvents();
+        if (!pModel->getTrackRows(trackId).isEmpty()) {
+            return true;
+        }
+        QTest::qSleep(20);
+    }
+    return false;
 }
 
 } // namespace
@@ -276,4 +347,81 @@ TEST_F(PlayerManagerTest, UnReplaceTest) {
     // First track should be reloaded
     ASSERT_NE(nullptr, deck1->getLoadedTrack());
     ASSERT_EQ(testId1, deck1->getLoadedTrack()->getId());
+}
+
+TEST_F(PlayerManagerTest, DecksColumnReflectsLoadedDecks) {
+    auto* pModel = m_pLibrary->trackTableModel();
+    ASSERT_NE(nullptr, pModel);
+
+    TrackPointer pTrack = getOrAddTrackByLocation(getTestDir().filePath(kTrackLocationTest1));
+    ASSERT_NE(nullptr, pTrack);
+    const TrackId trackId = pTrack->getId();
+    ASSERT_TRUE(trackId.isValid());
+
+    pModel->select();
+    const int decksColumn = pModel->fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_LOADED_DECK);
+    ASSERT_GE(decksColumn, 0);
+    EXPECT_EQ(TrackModel::SortColumnId::Invalid,
+            pModel->sortColumnIdFromColumnIndex(decksColumn));
+    ASSERT_FALSE(pModel->getTrackRows(trackId).isEmpty());
+    EXPECT_EQ(QString(), deckMarkerForTrack(pModel, trackId, decksColumn));
+
+    auto* pDeck1 = m_pPlayerManager->getDeck(0);
+    ASSERT_NE(nullptr, pDeck1);
+    pDeck1->slotLoadTrack(pTrack,
+#ifdef __STEM__
+            mixxx::StemChannelSelection(),
+#endif
+            false);
+    m_pEngine->process(1024);
+    ASSERT_TRUE(waitForTrackToBeLoadedWithTimeout(pDeck1));
+
+    // Rebuilding the model should preserve the loaded deck marker.
+    pModel->select();
+    EXPECT_TRUE(waitForDeckMarker(pModel, trackId, decksColumn, QStringLiteral("1")));
+
+    auto* pDeck2 = m_pPlayerManager->getDeck(1);
+    ASSERT_NE(nullptr, pDeck2);
+    pDeck2->slotLoadTrack(pTrack,
+#ifdef __STEM__
+            mixxx::StemChannelSelection(),
+#endif
+            false);
+    m_pEngine->process(1024);
+    ASSERT_TRUE(waitForTrackToBeLoadedWithTimeout(pDeck2));
+
+    EXPECT_TRUE(waitForDeckMarker(pModel, trackId, decksColumn, QStringLiteral("1,2")));
+    EXPECT_EQ(QStringLiteral("Deck 1, Deck 2"),
+            deckToolTipForTrack(pModel, trackId, decksColumn));
+
+    pDeck1->slotEjectTrack(1.0);
+    EXPECT_TRUE(waitForDeckMarker(pModel, trackId, decksColumn, QStringLiteral("2")));
+
+    pDeck2->slotEjectTrack(1.0);
+    EXPECT_TRUE(waitForTrackRow(pModel, trackId));
+    EXPECT_TRUE(waitForDeckMarker(pModel, trackId, decksColumn, QString()));
+}
+
+TEST_F(PlayerManagerTest, DecksColumnIsOmittedFromCsvExport) {
+    auto* pModel = m_pLibrary->trackTableModel();
+    ASSERT_NE(nullptr, pModel);
+    pModel->select();
+
+    const int decksColumn = pModel->fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_LOADED_DECK);
+    ASSERT_GE(decksColumn, 0);
+
+    QTemporaryFile csvFile;
+    ASSERT_TRUE(csvFile.open());
+    const QString csvPath = csvFile.fileName();
+    csvFile.close();
+
+    ASSERT_TRUE(ParserCsv::writeCSVFile(csvPath, pModel, false));
+
+    QFile file(csvPath);
+    ASSERT_TRUE(file.open(QIODevice::ReadOnly | QIODevice::Text));
+    const QString headerLine = QString::fromUtf8(file.readLine());
+
+    QString decksHeader = pModel->headerData(decksColumn, Qt::Horizontal, Qt::DisplayRole).toString();
+    decksHeader.replace('"', QStringLiteral("\"\""));
+    EXPECT_FALSE(headerLine.contains(QStringLiteral("\"%1\"").arg(decksHeader)));
 }

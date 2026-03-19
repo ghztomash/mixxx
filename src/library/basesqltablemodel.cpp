@@ -2,7 +2,6 @@
 
 #include <QUrl>
 #include <QtDebug>
-#include <algorithm>
 
 #include "library/dao/trackschema.h"
 #include "library/queryutil.h"
@@ -352,6 +351,9 @@ void BaseSqlTableModel::select() {
     // Both rowInfo and trackIdToRows (might) have been moved and
     // must not be used afterwards!
 
+    updateTrackIdLookup();
+    rebuildLoadedDeckState();
+
     qDebug() << this << "select() returned" << m_rowInfo.size()
              << "results in" << time.elapsed().debugMillisWithUnit();
 }
@@ -411,6 +413,10 @@ const QString BaseSqlTableModel::currentSearch() const {
     return m_currentSearch;
 }
 
+bool BaseSqlTableModel::isColumnSortable(int column) const {
+    return column != fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_LOADED_DECK);
+}
+
 void BaseSqlTableModel::setExtraFilter(const QString& extraFilter) {
     // Note: don't use SQL strings as extraFilter, this will cause issues in
     // BaseTrackCache::filterAndSort() which is responsible for adding/removing
@@ -437,6 +443,9 @@ void BaseSqlTableModel::search(const QString& searchText) {
 void BaseSqlTableModel::setSort(int column, Qt::SortOrder order) {
     if (sDebug) {
         qDebug() << this << "setSort()" << column << order << m_tableColumns;
+    }
+    if (!isColumnSortable(column)) {
+        return;
     }
 
     int trackSourceColumnCount = m_trackSource ? m_trackSource->columnCount() : 0;
@@ -524,7 +533,8 @@ void BaseSqlTableModel::setSort(int column, Qt::SortOrder order) {
     m_trackSourceOrderBy.clear();
     m_tableOrderBy.clear();
 
-    if (column > 0 && column < m_tableColumns.size()) {
+    if (column > 0 &&
+            column < m_tableColumns.size()) {
         // Table sorting, no history
         if (column == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_PREVIEW)) {
             // Random sort easter egg
@@ -574,6 +584,9 @@ void BaseSqlTableModel::setSort(int column, Qt::SortOrder order) {
 void BaseSqlTableModel::sort(int column, Qt::SortOrder order) {
     if (sDebug) {
         qDebug() << this << "sort()" << column << order;
+    }
+    if (!isColumnSortable(column)) {
+        return;
     }
     setSort(column, order);
     select();
@@ -641,6 +654,23 @@ QString BaseSqlTableModel::modelKey(bool noSearch) const {
     return kModelName + m_tableName +
             QStringLiteral("#") +
             currentSearch();
+}
+
+TrackId BaseSqlTableModel::loadedDeckStateTrackId(
+        const QModelIndex& index) const {
+    return rowIdentityTrackId(index);
+}
+
+TrackId BaseSqlTableModel::rowIdentityTrackId(
+        const QModelIndex& index) const {
+    if (!index.isValid()) {
+        return TrackId();
+    }
+    const int row = index.row();
+    if (row < 0 || row >= m_rowInfo.size()) {
+        return TrackId();
+    }
+    return m_rowInfo.at(row).trackId;
 }
 
 QVariant BaseSqlTableModel::rawValue(
@@ -902,6 +932,7 @@ void BaseSqlTableModel::removeTrackRows(const QSet<TrackId>& trackIdsToRemove) {
             std::move(rowInfos),
             std::move(trackIdToRows),
             std::move(trackPosToRows));
+    updateTrackIdLookup();
 }
 
 QList<TrackRef> BaseSqlTableModel::getTrackRefs(

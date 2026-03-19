@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QHash>
 #include <QObject>
 
 #include "library/trackmodel.h"
@@ -28,7 +29,10 @@ class BaseExternalTrackModel : public BaseSqlTableModel {
 
   protected:
     virtual QString resolveLocation(const QString& nativeLocation) const;
+    void updateTrackIdLookup() override;
 
   private:
     TrackId doGetTrackId(const TrackPointer& pTrack) const override;
+
+    QHash<QString, TrackId> m_trackIdsByLocation;
 };

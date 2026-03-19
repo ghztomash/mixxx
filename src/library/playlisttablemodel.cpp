@@ -168,6 +168,7 @@ void PlaylistTableModel::selectPlaylist(int playlistId) {
             << PLAYLISTTRACKSTABLE_POSITION
             << PLAYLISTTRACKSTABLE_DATETIMEADDED
             << "'' AS " + LIBRARYTABLE_PREVIEW
+            << "'' AS " + LIBRARYTABLE_LOADED_DECK
             // For sorting the cover art column we give LIBRARYTABLE_COVERART
             // the same value as the cover digest.
             << LIBRARYTABLE_COVERART_DIGEST + " AS " + LIBRARYTABLE_COVERART;
@@ -189,7 +190,8 @@ void PlaylistTableModel::selectPlaylist(int playlistId) {
     // columns[1] = PLAYLISTTRACKSTABLE_POSITION from above
     // columns[2] = PLAYLISTTRACKSTABLE_DATETIMEADDED from above
     columns[3] = LIBRARYTABLE_PREVIEW;
-    columns[4] = LIBRARYTABLE_COVERART;
+    columns[4] = LIBRARYTABLE_LOADED_DECK;
+    columns[5] = LIBRARYTABLE_COVERART;
     setTable(playlistTableName,
             LIBRARYTABLE_ID,
             columns,

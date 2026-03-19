@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QHash>
+
 #include "library/trackmodel.h"
 #include "library/basesqltablemodel.h"
 
@@ -24,10 +26,12 @@ class BansheePlaylistModel final : public BaseSqlTableModel {
     Capabilities getCapabilities() const final;
 
   private:
+    void updateTrackIdLookup() override;
     TrackId doGetTrackId(const TrackPointer& pTrack) const final;
     void dropTempTable();
 
     BansheeDbConnection* m_pConnection;
     int m_playlistId;
     QString m_tempTableName;
+    QHash<QString, TrackId> m_trackIdsByLocation;
 };
