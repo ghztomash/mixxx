@@ -132,6 +132,7 @@ class Library: public QObject {
 #endif
     void slotLoadLocationToPlayer(const QString& location, const QString& group, bool play);
     void slotRefreshLibraryModels();
+    void slotRefreshCurrentTrackTableView();
     void slotCreatePlaylist();
     void slotCreateCrate();
     void slotSearchInCurrentView();

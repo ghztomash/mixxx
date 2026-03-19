@@ -113,6 +113,16 @@ class WTrackTableView : public WLibraryTableView {
     QColor getTrackMissingColor() const {
         return m_trackMissingColor;
     }
+    // Color for loaded tracks' text color. Default: green
+    // BaseTrackTableModel uses this for the ForegroundRole of loaded tracks.
+    static constexpr QColor kDefaultTrackLoadedColor = QColor(0x51, 0x8f, 0x00);
+    Q_PROPERTY(QColor trackLoadedColor
+                    MEMBER m_trackLoadedColor
+                            NOTIFY trackLoadedColorChanged
+                                    DESIGNABLE true);
+    QColor getTrackLoadedColor() const {
+        return m_trackLoadedColor;
+    }
     // Color for the track drop indicator line. Default: red
     static constexpr QColor kDefaultDropIndicatorColor = QColor(0xff, 0x00, 0x00);
     Q_PROPERTY(QColor dropIndicatorColor
@@ -125,6 +135,7 @@ class WTrackTableView : public WLibraryTableView {
     void focusBorderColorChanged(QColor col);
     void trackPlayedColorChanged(QColor col);
     void trackMissingColorChanged(QColor col);
+    void trackLoadedColorChanged(QColor col);
     void dropIndicatorColorChanged(QColor col);
 
   public slots:
@@ -202,6 +213,7 @@ class WTrackTableView : public WLibraryTableView {
     QColor m_focusBorderColor;
     QColor m_trackPlayedColor;
     QColor m_trackMissingColor;
+    QColor m_trackLoadedColor;
     QColor m_dropIndicatorColor;
     bool m_sorting;
 

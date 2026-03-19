@@ -2367,6 +2367,8 @@ WTrackTableView {
   /* This is the color used to paint the text of played tracks.
      BaseTrackTableModel::data() uses this to override Qt::ForegroundRole (QBrush). */
   qproperty-trackPlayedColor: #555;
+  /* This is the color used to paint the text of loaded tracks. */
+  qproperty-trackLoadedColor: #518f00; /* green */
 }
 
 WLibrarySidebar {

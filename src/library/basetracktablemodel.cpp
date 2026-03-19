@@ -60,6 +60,10 @@ const QVector<int> kDecksColumnUpdateRoles = {
         Qt::ToolTipRole,
 };
 
+const QVector<int> kLoadedTrackRowUpdateRoles = {
+        Qt::ForegroundRole,
+};
+
 quint8 deckBitMask(int deckNumber) {
     if (deckNumber <= 0 || deckNumber > kMaxNumberOfDecks) {
         return 0;
@@ -130,9 +134,15 @@ void BaseTrackTableModel::setKeyColorPalette(const ColorPalette& palette) {
 
 bool BaseTrackTableModel::s_bApplyPlayedTrackColor =
         kApplyPlayedTrackColorDefault;
+bool BaseTrackTableModel::s_bApplyLoadedTrackColor =
+        kApplyLoadedTrackColorDefault;
 
 void BaseTrackTableModel::setApplyPlayedTrackColor(bool apply) {
     s_bApplyPlayedTrackColor = apply;
+}
+
+void BaseTrackTableModel::setApplyLoadedTrackColor(bool apply) {
+    s_bApplyLoadedTrackColor = apply;
 }
 
 const QString BaseTrackTableModel::kDateFormatDefault = QString();
@@ -152,7 +162,8 @@ BaseTrackTableModel::BaseTrackTableModel(
           m_previewDeckGroup(PlayerManager::groupForPreviewDeck(0)),
           m_backgroundColorOpacity(WLibrary::kDefaultTrackTableBackgroundColorOpacity),
           m_trackPlayedColor(QColor(WTrackTableView::kDefaultTrackPlayedColor)),
-          m_trackMissingColor(QColor(WTrackTableView::kDefaultTrackMissingColor)) {
+          m_trackMissingColor(QColor(WTrackTableView::kDefaultTrackMissingColor)),
+          m_trackLoadedColor(QColor(WTrackTableView::kDefaultTrackLoadedColor)) {
     connect(&pTrackCollectionManager->internalCollection()->getTrackDAO(),
             &TrackDAO::tracksRemoved,
             this,
@@ -381,6 +392,13 @@ QAbstractItemDelegate* BaseTrackTableModel::delegateForColumn(
             [this](QColor col) {
                 m_trackMissingColor = col;
             });
+    m_trackLoadedColor = pTableView->getTrackLoadedColor();
+    connect(pTableView,
+            &WTrackTableView::trackLoadedColorChanged,
+            this,
+            [this](QColor col) {
+                m_trackLoadedColor = col;
+            });
     if (index == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_RATING)) {
         return new StarDelegate(pTableView);
     } else if (index == fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_BPM)) {
@@ -463,6 +481,12 @@ QVariant BaseTrackTableModel::data(
                 missingRaw.canConvert<bool>() &&
                 missingRaw.toBool()) {
             return QVariant::fromValue(m_trackMissingColor);
+        }
+        const TrackId loadedTrackId = loadedDeckStateTrackId(index);
+        if (s_bApplyLoadedTrackColor &&
+                loadedTrackId.isValid() &&
+                loadedDeckMask(loadedTrackId) != 0) {
+            return QVariant::fromValue(m_trackLoadedColor);
         }
         if (s_bApplyPlayedTrackColor) {
             // Custom text color for played tracks
@@ -1172,9 +1196,14 @@ void BaseTrackTableModel::slotTrackChanged(
 
     if (oldTrackChanged) {
         refreshTrackRowsInColumn(oldTrackId, decksColumn, kDecksColumnUpdateRoles);
+        refreshTrackRows(oldTrackId, kLoadedTrackRowUpdateRoles);
     }
     if (newTrackId != oldTrackId && newTrackChanged) {
         refreshTrackRowsInColumn(newTrackId, decksColumn, kDecksColumnUpdateRoles);
+        refreshTrackRows(newTrackId, kLoadedTrackRowUpdateRoles);
+    }
+    if (oldTrackChanged || newTrackChanged) {
+        onLoadedDeckStateChanged();
     }
 }
 
@@ -1262,6 +1291,39 @@ void BaseTrackTableModel::emitDataChangedForMultipleRowsInColumn(
     }
 }
 
+void BaseTrackTableModel::emitDataChangedForMultipleRows(
+        const QList<int>& rows,
+        const QVector<int>& roles) {
+    DEBUG_ASSERT(columnCount() > 0);
+    int beginRow = -1;
+    int endRow = -1;
+    for (const int row : rows) {
+        DEBUG_ASSERT(row >= rows.first());
+        DEBUG_ASSERT(row <= rows.last());
+        DEBUG_ASSERT(row >= 0);
+        if (row >= rowCount()) {
+            continue;
+        }
+        if (beginRow < 0) {
+            beginRow = row;
+            endRow = row + 1;
+        } else if (row == endRow) {
+            ++endRow;
+        } else {
+            QModelIndex topLeft = index(beginRow, 0);
+            QModelIndex bottomRight = index(endRow - 1, columnCount() - 1);
+            emit dataChanged(topLeft, bottomRight, roles);
+            beginRow = row;
+            endRow = row + 1;
+        }
+    }
+    if (beginRow < endRow) {
+        QModelIndex topLeft = index(beginRow, 0);
+        QModelIndex bottomRight = index(endRow - 1, columnCount() - 1);
+        emit dataChanged(topLeft, bottomRight, roles);
+    }
+}
+
 void BaseTrackTableModel::rebuildLoadedDeckState() {
     m_loadedDecksByTrackId.clear();
 
@@ -1297,6 +1359,21 @@ void BaseTrackTableModel::refreshTrackRowsInColumn(
     }
 
     emitDataChangedForMultipleRowsInColumn(rows, column, roles);
+}
+
+void BaseTrackTableModel::refreshTrackRows(
+        TrackId trackId,
+        const QVector<int>& roles) {
+    if (!trackId.isValid() || columnCount() <= 0) {
+        return;
+    }
+
+    const auto rows = getTrackRows(trackId);
+    if (rows.isEmpty()) {
+        return;
+    }
+
+    emitDataChangedForMultipleRows(rows, roles);
 }
 
 bool BaseTrackTableModel::addLoadedDeck(
@@ -1359,6 +1436,15 @@ QString BaseTrackTableModel::loadedDeckDisplayText(
         return QString();
     }
     return it->displayText;
+}
+
+quint8 BaseTrackTableModel::loadedDeckMask(
+        TrackId trackId) const {
+    const auto it = m_loadedDecksByTrackId.constFind(trackId);
+    if (it == m_loadedDecksByTrackId.cend()) {
+        return 0;
+    }
+    return it->deckMask;
 }
 
 QString BaseTrackTableModel::loadedDeckToolTipText(

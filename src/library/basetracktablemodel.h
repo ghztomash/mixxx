@@ -134,6 +134,9 @@ class BaseTrackTableModel : public QAbstractTableModel, public TrackModel {
     static constexpr bool kApplyPlayedTrackColorDefault = true;
     static void setApplyPlayedTrackColor(bool apply);
 
+    static constexpr bool kApplyLoadedTrackColorDefault = true;
+    static void setApplyLoadedTrackColor(bool apply);
+
     enum class DateFormat {
         Native = 0,        // System Default
         ISO8601 = 1,       // yyyy-MM-dd
@@ -173,6 +176,9 @@ class BaseTrackTableModel : public QAbstractTableModel, public TrackModel {
             const QList<int>& rows,
             int column,
             const QVector<int>& roles = QVector<int>());
+    void emitDataChangedForMultipleRows(
+            const QList<int>& rows,
+            const QVector<int>& roles = QVector<int>());
 
     const TrackId previewDeckTrackId() const {
         return m_previewDeckTrackId;
@@ -185,6 +191,14 @@ class BaseTrackTableModel : public QAbstractTableModel, public TrackModel {
 
     virtual void updateTrackIdLookup() {
     }
+
+    virtual void onLoadedDeckStateChanged() {
+    }
+
+    quint8 loadedDeckMask(TrackId trackId) const;
+    void refreshTrackRows(
+            TrackId trackId,
+            const QVector<int>& roles);
 
     const QPointer<TrackCollectionManager> m_pTrackCollectionManager;
 
@@ -328,6 +342,7 @@ class BaseTrackTableModel : public QAbstractTableModel, public TrackModel {
     double m_backgroundColorOpacity;
     QColor m_trackPlayedColor;
     QColor m_trackMissingColor;
+    QColor m_trackLoadedColor;
 
     ColumnCache m_columnCache;
 
@@ -355,5 +370,6 @@ class BaseTrackTableModel : public QAbstractTableModel, public TrackModel {
     static std::optional<ColorPalette> s_keyColorPalette;
 
     static bool s_bApplyPlayedTrackColor;
+    static bool s_bApplyLoadedTrackColor;
     static QString s_dateFormat;
 };
