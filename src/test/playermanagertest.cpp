@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <QCoreApplication>
+#include <QColor>
 #include <QElapsedTimer>
 #include <QFile>
 #include <QTemporaryFile>
@@ -83,6 +84,18 @@ QString deckToolTipForTrack(
         return {};
     }
     return pModel->data(pModel->index(rows.first(), decksColumn), Qt::ToolTipRole).toString();
+}
+
+QColor trackColorForTrack(
+        LibraryTableModel* pModel,
+        TrackId trackId,
+        int column) {
+    const auto rows = pModel->getTrackRows(trackId);
+    if (rows.isEmpty()) {
+        return QColor();
+    }
+    return pModel->data(pModel->index(rows.first(), column), Qt::ForegroundRole)
+            .value<QColor>();
 }
 
 bool waitForDeckMarker(
@@ -359,12 +372,15 @@ TEST_F(PlayerManagerTest, DecksColumnReflectsLoadedDecks) {
     ASSERT_TRUE(trackId.isValid());
 
     pModel->select();
+    const int titleColumn = pModel->fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_TITLE);
     const int decksColumn = pModel->fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_LOADED_DECK);
+    ASSERT_GE(titleColumn, 0);
     ASSERT_GE(decksColumn, 0);
     EXPECT_EQ(TrackModel::SortColumnId::Invalid,
             pModel->sortColumnIdFromColumnIndex(decksColumn));
     ASSERT_FALSE(pModel->getTrackRows(trackId).isEmpty());
     EXPECT_EQ(QString(), deckMarkerForTrack(pModel, trackId, decksColumn));
+    EXPECT_FALSE(trackColorForTrack(pModel, trackId, titleColumn).isValid());
 
     auto* pDeck1 = m_pPlayerManager->getDeck(0);
     ASSERT_NE(nullptr, pDeck1);
@@ -379,6 +395,8 @@ TEST_F(PlayerManagerTest, DecksColumnReflectsLoadedDecks) {
     // Rebuilding the model should preserve the loaded deck marker.
     pModel->select();
     EXPECT_TRUE(waitForDeckMarker(pModel, trackId, decksColumn, QStringLiteral("1")));
+    EXPECT_EQ(QColor(QStringLiteral("#518f00")),
+            trackColorForTrack(pModel, trackId, titleColumn));
 
     auto* pDeck2 = m_pPlayerManager->getDeck(1);
     ASSERT_NE(nullptr, pDeck2);
@@ -400,6 +418,7 @@ TEST_F(PlayerManagerTest, DecksColumnReflectsLoadedDecks) {
     pDeck2->slotEjectTrack(1.0);
     EXPECT_TRUE(waitForTrackRow(pModel, trackId));
     EXPECT_TRUE(waitForDeckMarker(pModel, trackId, decksColumn, QString()));
+    EXPECT_FALSE(trackColorForTrack(pModel, trackId, titleColumn).isValid());
 }
 
 TEST_F(PlayerManagerTest, DecksColumnIsOmittedFromCsvExport) {

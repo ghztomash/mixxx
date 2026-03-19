@@ -603,6 +603,12 @@ void Library::slotRefreshLibraryModels() {
     m_pAnalysisFeature->refreshLibraryModels();
 }
 
+void Library::slotRefreshCurrentTrackTableView() {
+    if (m_pLibraryWidget) {
+        m_pLibraryWidget->refreshCurrentTrackTableView();
+    }
+}
+
 void Library::slotCreatePlaylist() {
     m_pPlaylistFeature->slotCreatePlaylist();
 }

@@ -142,6 +142,14 @@ void WLibrary::slotSelectTrackInActiveTrackView(const TrackId& trackId) {
     }
 }
 
+void WLibrary::refreshCurrentTrackTableView() {
+    WTrackTableView* pTracksView = getCurrentTrackTableView();
+    if (!pTracksView) {
+        return;
+    }
+    pTracksView->viewport()->update();
+}
+
 void WLibrary::saveCurrentViewState() const {
     WTrackTableView* pTracksView = getCurrentTrackTableView();
     if (!pTracksView) {

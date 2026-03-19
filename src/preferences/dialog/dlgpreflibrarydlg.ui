@@ -298,7 +298,15 @@
        </widget>
       </item>
 
-      <item row="11" column="0">
+      <item row="11" column="0" colspan="4">
+       <widget class="QCheckBox" name="checkbox_loaded_track_color">
+        <property name="text">
+         <string>Highlight loaded tracks</string>
+        </property>
+       </widget>
+      </item>
+
+      <item row="12" column="0">
        <widget class="QLabel" name="label_dateFormat">
         <property name="text">
          <string>Date Format:</string>
@@ -308,7 +316,7 @@
         </property>
        </widget>
       </item>
-      <item row="11" column="1" colspan="3">
+      <item row="12" column="1" colspan="3">
        <layout class="QHBoxLayout" name="horizontalLayout_dateFormat">
         <property name="leftMargin">
          <number>0</number>
@@ -783,6 +791,7 @@
   <tabstop>btn_library_font</tabstop>
   <tabstop>spinbox_bpm_precision</tabstop>
   <tabstop>checkbox_played_track_color</tabstop>
+  <tabstop>checkbox_loaded_track_color</tabstop>
   <tabstop>comboBox_dateFormat</tabstop>
   <tabstop>spinBox_search_debouncing_timeout</tabstop>
   <tabstop>checkBox_enable_search_completions</tabstop>

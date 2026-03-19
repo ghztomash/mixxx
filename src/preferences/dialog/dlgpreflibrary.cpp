@@ -275,6 +275,8 @@ void DlgPrefLibrary::slotResetToDefaults() {
     spinbox_bpm_precision->setValue(BaseTrackTableModel::kBpmColumnPrecisionDefault);
     checkbox_played_track_color->setChecked(
             BaseTrackTableModel::kApplyPlayedTrackColorDefault);
+    checkbox_loaded_track_color->setChecked(
+            BaseTrackTableModel::kApplyLoadedTrackColorDefault);
 
     radioButton_cover_art_fetcher_medium->setChecked(true);
 
@@ -464,6 +466,12 @@ void DlgPrefLibrary::slotUpdate() {
                     kSidebarHoverExpandDelayConfigKey,
                     kSidebarHoverExpandDelayDefault);
     spinBox_sidebar_hover_expand_delay->setValue(sidebarHoverExpandDelay);
+
+    const auto applyLoadedTrackColor =
+            m_pConfig->getValue(
+                    mixxx::library::prefs::kApplyLoadedTrackColorConfigKey,
+                    BaseTrackTableModel::kApplyLoadedTrackColorDefault);
+    checkbox_loaded_track_color->setChecked(applyLoadedTrackColor);
 }
 
 void DlgPrefLibrary::slotCancel() {
@@ -682,6 +690,12 @@ void DlgPrefLibrary::slotApply() {
     m_pConfig->set(
             kApplyPlayedTrackColorConfigKey,
             ConfigValue(checkbox_played_track_color->isChecked()));
+    BaseTrackTableModel::setApplyLoadedTrackColor(
+            checkbox_loaded_track_color->isChecked());
+    m_pConfig->set(
+            mixxx::library::prefs::kApplyLoadedTrackColorConfigKey,
+            ConfigValue(checkbox_loaded_track_color->isChecked()));
+    m_pLibrary->slotRefreshCurrentTrackTableView();
 
     int sidebarHoverExpandDelay = spinBox_sidebar_hover_expand_delay->value();
     m_pConfig->setValue(kSidebarHoverExpandDelayConfigKey, sidebarHoverExpandDelay);
