@@ -22,7 +22,8 @@ void MissingTableModel::setTableModel() {
     const QString tableName("missing_songs");
 
     QStringList columns;
-    columns << "library." + LIBRARYTABLE_ID;
+    columns << "library." + LIBRARYTABLE_ID
+            << "'' AS " + LIBRARYTABLE_LOADED_DECK;
 
     QSqlQuery query(m_database);
     query.prepare(
@@ -43,6 +44,7 @@ void MissingTableModel::setTableModel() {
 
     QStringList tableColumns;
     tableColumns << LIBRARYTABLE_ID;
+    tableColumns << LIBRARYTABLE_LOADED_DECK;
     setTable(tableName,
             LIBRARYTABLE_ID,
             std::move(tableColumns),

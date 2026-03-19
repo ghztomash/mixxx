@@ -24,6 +24,7 @@ void LibraryTableModel::setTableModel() {
     QStringList columns;
     columns << "library." + LIBRARYTABLE_ID
             << "'' AS " + LIBRARYTABLE_PREVIEW
+            << "'' AS " + LIBRARYTABLE_LOADED_DECK
             // For sorting the cover art column we give LIBRARYTABLE_COVERART
             // the same value as the cover digest.
             << LIBRARYTABLE_COVERART_DIGEST + " AS " + LIBRARYTABLE_COVERART;
@@ -43,6 +44,7 @@ void LibraryTableModel::setTableModel() {
     QStringList tableColumns;
     tableColumns << LIBRARYTABLE_ID;
     tableColumns << LIBRARYTABLE_PREVIEW;
+    tableColumns << LIBRARYTABLE_LOADED_DECK;
     tableColumns << LIBRARYTABLE_COVERART;
     setTable(tableName,
             LIBRARYTABLE_ID,

@@ -45,6 +45,7 @@ const QString LIBRARYTABLE_TUNING_FREQUENCY = QStringLiteral("tuning_frequency_h
 const QString LIBRARYTABLE_BPM_LOCK = QStringLiteral("bpm_lock");
 const QString LIBRARYTABLE_BEATS_VERSION = QStringLiteral("beats_version");
 const QString LIBRARYTABLE_PREVIEW = QStringLiteral("preview");
+const QString LIBRARYTABLE_LOADED_DECK = QStringLiteral("loaded_deck");
 const QString LIBRARYTABLE_COLOR = QStringLiteral("color");
 const QString LIBRARYTABLE_COVERART = QStringLiteral("coverart");
 const QString LIBRARYTABLE_COVERART_SOURCE = QStringLiteral("coverart_source");

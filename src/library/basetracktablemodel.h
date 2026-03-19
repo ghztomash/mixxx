@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QAbstractTableModel>
+#include <QHash>
 #include <QList>
 #include <QPointer>
 #include <optional>
@@ -180,6 +181,11 @@ class BaseTrackTableModel : public QAbstractTableModel, public TrackModel {
     bool isBpmLocked(
             const QModelIndex& index) const;
 
+    void rebuildLoadedDeckState();
+
+    virtual void updateTrackIdLookup() {
+    }
+
     const QPointer<TrackCollectionManager> m_pTrackCollectionManager;
 
     ///////////////////////////////////////////////////////
@@ -227,6 +233,7 @@ class BaseTrackTableModel : public QAbstractTableModel, public TrackModel {
     /// COLUMN_LIBRARYTABLE_KEY_ID: int (internal key code)
     /// COLUMN_LIBRARYTABLE_BPM_LOCK: bool
     /// COLUMN_LIBRARYTABLE_PREVIEW: bool
+    /// COLUMN_LIBRARYTABLE_LOADED_DECK: QString (pass-through)
     /// COLUMN_LIBRARYTABLE_COLOR: mixxx::RgbColor::code_t
     /// COLUMN_LIBRARYTABLE_COVERART: virtual column for CoverArtDelegate
     /// COLUMN_LIBRARYTABLE_COVERART_SOURCE: int (pass-through)
@@ -278,6 +285,25 @@ class BaseTrackTableModel : public QAbstractTableModel, public TrackModel {
             const QPixmap& pixmap);
 
   private:
+    void refreshTrackRowsInColumn(
+            TrackId trackId,
+            int column,
+            const QVector<int>& roles = QVector<int>());
+    bool addLoadedDeck(
+            TrackId trackId,
+            int deckNumber);
+    bool removeLoadedDeck(
+            TrackId trackId,
+            int deckNumber);
+    QString loadedDeckDisplayText(
+            TrackId trackId) const;
+    QString loadedDeckToolTipText(
+            TrackId trackId) const;
+    void updateLoadedDeckText(
+            TrackId trackId);
+    virtual TrackId loadedDeckStateTrackId(
+            const QModelIndex& index) const;
+
     QVariant rawSiblingValue(
             const QModelIndex& index,
             ColumnCache::Column siblingField) const;
@@ -311,7 +337,14 @@ class BaseTrackTableModel : public QAbstractTableModel, public TrackModel {
     };
     QVector<ColumnHeader> m_columnHeaders;
 
+    struct LoadedDeckState {
+        quint8 deckMask = 0;
+        QString displayText;
+        QString toolTipText;
+    };
+
     TrackId m_previewDeckTrackId;
+    QHash<TrackId, LoadedDeckState> m_loadedDecksByTrackId;
 
     mutable QModelIndex m_toolTipIndex;
 

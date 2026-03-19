@@ -34,6 +34,7 @@
 #define CLM_PLAYCOUNT "timesplayed"
 #define CLM_COMPOSER "composer"
 #define CLM_PREVIEW "preview"
+#define CLM_LOADED_DECK "loaded_deck"
 #define CLM_CRATE "crate"
 
 namespace {
@@ -60,6 +61,7 @@ const QString kComment = QStringLiteral(CLM_COMMENT);
 const QString kPlaycount = QStringLiteral(CLM_PLAYCOUNT);
 const QString kComposer = QStringLiteral(CLM_COMPOSER);
 const QString kPreview = QStringLiteral(CLM_PREVIEW);
+const QString kLoadedDeck = QStringLiteral(CLM_LOADED_DECK);
 const QString kCrate = QStringLiteral(CLM_CRATE);
 
 } // namespace
@@ -122,7 +124,8 @@ void BansheePlaylistModel::selectPlaylist(int playlistId) {
                     CLM_COMMENT " TEXT, "                  //
                     CLM_PLAYCOUNT " INTEGER, "             //
                     CLM_COMPOSER " TEXT, "                 //
-                    CLM_PREVIEW " TEXT)")
+                    CLM_PREVIEW " TEXT, "                  //
+                    CLM_LOADED_DECK " TEXT)")
                                 .arg(m_tempTableName))) {
             LOG_FAILED_QUERY(query);
         }
@@ -198,7 +201,8 @@ void BansheePlaylistModel::selectPlaylist(int playlistId) {
     QStringList tableColumns = {
             kTrackId,
             kViewOrder,
-            kPreview};
+            kPreview,
+            kLoadedDeck};
 
     QStringList trackSourceColumns = {
             kTrackId,
@@ -257,15 +261,22 @@ Qt::ItemFlags BansheePlaylistModel::flags(const QModelIndex& index) const {
 
 TrackId BansheePlaylistModel::doGetTrackId(const TrackPointer& pTrack) const {
     if (pTrack) {
-        for (int row = 0; row < rowCount(); ++row) {
-            const QUrl rowUrl(getFieldString(index(row, 0),
-                    ColumnCache::COLUMN_TRACKLOCATIONSTABLE_LOCATION));
-            if (mixxx::FileInfo::fromQUrl(rowUrl) == pTrack->getFileInfo()) {
-                return TrackId(getFieldVariant(index(row, 0), CLM_VIEW_ORDER));
-            }
-        }
+        return m_trackIdsByLocation.value(pTrack->getLocation());
     }
     return TrackId();
+}
+
+void BansheePlaylistModel::updateTrackIdLookup() {
+    m_trackIdsByLocation.clear();
+    m_trackIdsByLocation.reserve(rowCount());
+
+    for (int row = 0; row < rowCount(); ++row) {
+        const QString location = getTrackLocation(index(row, 0));
+        if (location.isEmpty()) {
+            continue;
+        }
+        m_trackIdsByLocation.insert(location, TrackId(getFieldVariant(index(row, 0), kTrackId)));
+    }
 }
 
 TrackPointer BansheePlaylistModel::getTrack(const QModelIndex& index) const {

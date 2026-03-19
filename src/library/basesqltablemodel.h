@@ -38,6 +38,7 @@ class BaseSqlTableModel : public BaseTrackTableModel {
     int rowCount(const QModelIndex& parent = QModelIndex()) const final;
     int columnCount(const QModelIndex& parent = QModelIndex()) const final;
 
+    bool isColumnSortable(int column) const override;
     void sort(int column, Qt::SortOrder order) final;
 
     ///////////////////////////////////////////////////////////////////////////
@@ -92,6 +93,10 @@ class BaseSqlTableModel : public BaseTrackTableModel {
             int column,
             const QVariant& value,
             int role) final;
+    TrackId loadedDeckStateTrackId(
+            const QModelIndex& index) const override;
+    TrackId rowIdentityTrackId(
+            const QModelIndex& index) const;
 
     void setTable(QString tableName,
             QString trackIdColumn,

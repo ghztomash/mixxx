@@ -93,6 +93,8 @@ class WTrackTableViewHeader : public QHeaderView {
     void showOrHideColumn(int);
 
   private:
+    void applyDefaultColumnOrder();
+
     int hiddenCount();
     void clearActions();
     TrackModel* getTrackModel();

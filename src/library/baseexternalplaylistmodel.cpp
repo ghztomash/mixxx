@@ -149,7 +149,8 @@ void BaseExternalPlaylistModel::setPlaylistById(int playlistId) {
     auto playlistViewColumns = QStringList{
             PLAYLISTTRACKSTABLE_TRACKID,
             PLAYLISTTRACKSTABLE_POSITION,
-            QStringLiteral("'' AS ") + LIBRARYTABLE_PREVIEW};
+            QStringLiteral("'' AS ") + LIBRARYTABLE_PREVIEW,
+            QStringLiteral("'' AS ") + LIBRARYTABLE_LOADED_DECK};
     const auto queryString =
             QStringLiteral(
                     "CREATE TEMPORARY VIEW IF NOT EXISTS %1 AS "
@@ -169,7 +170,8 @@ void BaseExternalPlaylistModel::setPlaylistById(int playlistId) {
     }
 
     m_currentPlaylistId = playlistId;
-    playlistViewColumns.last() = LIBRARYTABLE_PREVIEW;
+    playlistViewColumns[2] = LIBRARYTABLE_PREVIEW;
+    playlistViewColumns[3] = LIBRARYTABLE_LOADED_DECK;
     setTable(playlistViewTable, playlistViewColumns.first(), playlistViewColumns, m_trackSource);
     setDefaultSort(fieldIndex(ColumnCache::COLUMN_PLAYLISTTRACKSTABLE_POSITION),
             Qt::AscendingOrder);
@@ -179,18 +181,29 @@ void BaseExternalPlaylistModel::setPlaylistById(int playlistId) {
 
 TrackId BaseExternalPlaylistModel::doGetTrackId(const TrackPointer& pTrack) const {
     if (pTrack) {
-        // The external table has foreign Track IDs, so we need to compare
-        // by location
-        for (int row = 0; row < rowCount(); ++row) {
-            QString nativeLocation = getFieldString(index(row, 0),
-                    ColumnCache::COLUMN_TRACKLOCATIONSTABLE_LOCATION);
-            QString location = QDir::fromNativeSeparators(nativeLocation);
-            if (location == pTrack->getLocation()) {
-                return TrackId(index(row, 0).data());
-            }
-        }
+        return m_trackIdsByLocation.value(pTrack->getLocation());
     }
     return TrackId();
+}
+
+void BaseExternalPlaylistModel::updateTrackIdLookup() {
+    m_trackIdsByLocation.clear();
+    m_trackIdsByLocation.reserve(rowCount());
+
+    for (int row = 0; row < rowCount(); ++row) {
+        const QModelIndex rowIndex = index(row, 0);
+        const QString nativeLocation = getFieldString(rowIndex,
+                ColumnCache::COLUMN_TRACKLOCATIONSTABLE_LOCATION);
+        const QString location = resolveLocation(nativeLocation);
+        if (location.isEmpty()) {
+            continue;
+        }
+        const TrackId trackId = rowIdentityTrackId(rowIndex);
+        if (!trackId.isValid()) {
+            continue;
+        }
+        m_trackIdsByLocation.insert(location, trackId);
+    }
 }
 
 TrackModel::Capabilities BaseExternalPlaylistModel::getCapabilities() const {

@@ -33,6 +33,7 @@
 #include "util/color/colorpalette.h"
 #include "util/color/predefinedcolorpalettes.h"
 #include "util/datetime.h"
+#include "util/defs.h"
 #include "util/db/sqlite.h"
 #include "util/logger.h"
 #include "widget/wlibrary.h"
@@ -46,6 +47,25 @@ constexpr double kRelativeHeightOfCoverartToolTip =
         0.165; // Height of the image for the cover art tooltip (Relative to the available screen size)
 
 constexpr int kReplayGainPrecision = 2;
+static_assert(kMaxNumberOfDecks <= 8);
+
+const QVector<int> kPreviewColumnUpdateRoles = {
+        Qt::DisplayRole,
+        Qt::CheckStateRole,
+        Qt::ToolTipRole,
+};
+
+const QVector<int> kDecksColumnUpdateRoles = {
+        Qt::DisplayRole,
+        Qt::ToolTipRole,
+};
+
+quint8 deckBitMask(int deckNumber) {
+    if (deckNumber <= 0 || deckNumber > kMaxNumberOfDecks) {
+        return 0;
+    }
+    return static_cast<quint8>(1U << (deckNumber - 1));
+}
 
 inline QSqlDatabase cloneDatabase(
         const QSqlDatabase& prototype) {
@@ -614,6 +634,13 @@ QVariant BaseTrackTableModel::roleValue(
             return composeCoverArtToolTipHtml(index);
         case ColumnCache::COLUMN_LIBRARYTABLE_PREVIEW:
             return QVariant();
+        case ColumnCache::COLUMN_LIBRARYTABLE_LOADED_DECK: {
+            const TrackId trackId = loadedDeckStateTrackId(index);
+            if (role == Qt::ToolTipRole) {
+                return loadedDeckToolTipText(trackId);
+            }
+            return loadedDeckDisplayText(trackId);
+        }
         case ColumnCache::COLUMN_LIBRARYTABLE_RATING:
         case ColumnCache::COLUMN_LIBRARYTABLE_TIMESPLAYED:
             return rawValue;
@@ -797,6 +824,10 @@ QVariant BaseTrackTableModel::roleValue(
             }
             return freq;
         }
+        case ColumnCache::COLUMN_LIBRARYTABLE_LOADED_DECK: {
+            const TrackId trackId = loadedDeckStateTrackId(index);
+            return loadedDeckDisplayText(trackId);
+        }
         case ColumnCache::COLUMN_LIBRARYTABLE_KEY:
             // The Key value is determined by either the KEY_ID or KEY column
             return KeyUtils::keyFromKeyTextAndIdFields(
@@ -915,6 +946,9 @@ QVariant BaseTrackTableModel::roleValue(
         case ColumnCache::COLUMN_LIBRARYTABLE_DATETIMEADDED:
         case ColumnCache::COLUMN_PLAYLISTTRACKSTABLE_DATETIMEADDED:
         case ColumnCache::COLUMN_LIBRARYTABLE_LAST_PLAYED_AT: {
+            return static_cast<int>(Qt::AlignVCenter | Qt::AlignHCenter);
+        }
+        case ColumnCache::COLUMN_LIBRARYTABLE_LOADED_DECK: {
             return static_cast<int>(Qt::AlignVCenter | Qt::AlignHCenter);
         }
         default:
@@ -1102,21 +1136,45 @@ void BaseTrackTableModel::slotTrackChanged(
         const QString& group,
         TrackPointer pNewTrack,
         TrackPointer pOldTrack) {
-    Q_UNUSED(pOldTrack);
     if (group == m_previewDeckGroup) {
-        // If there was a previously loaded track, refresh its rows so the
-        // preview state will update.
-        if (m_previewDeckTrackId.isValid()) {
-            const int numColumns = columnCount();
-            const auto rows = getTrackRows(m_previewDeckTrackId);
-            m_previewDeckTrackId = TrackId(); // invalidate
-            for (int row : rows) {
-                QModelIndex topLeft = index(row, 0);
-                QModelIndex bottomRight = index(row, numColumns);
-                emit dataChanged(topLeft, bottomRight);
-            }
-        }
+        const TrackId oldPreviewTrackId = m_previewDeckTrackId;
         m_previewDeckTrackId = doGetTrackId(pNewTrack);
+
+        const int previewColumn = fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_PREVIEW);
+        if (previewColumn >= 0) {
+            refreshTrackRowsInColumn(
+                    oldPreviewTrackId,
+                    previewColumn,
+                    kPreviewColumnUpdateRoles);
+            refreshTrackRowsInColumn(
+                    m_previewDeckTrackId,
+                    previewColumn,
+                    kPreviewColumnUpdateRoles);
+        }
+    }
+
+    int deckNumber = 0;
+    if (!PlayerManager::isDeckGroup(group, &deckNumber)) {
+        return;
+    }
+
+    const int decksColumn = fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_LOADED_DECK);
+    if (decksColumn < 0) {
+        return;
+    }
+
+    const TrackId oldTrackId = doGetTrackId(pOldTrack);
+    const TrackId newTrackId = doGetTrackId(pNewTrack);
+    const bool oldTrackChanged =
+            oldTrackId.isValid() && removeLoadedDeck(oldTrackId, deckNumber);
+    const bool newTrackChanged =
+            newTrackId.isValid() && addLoadedDeck(newTrackId, deckNumber);
+
+    if (oldTrackChanged) {
+        refreshTrackRowsInColumn(oldTrackId, decksColumn, kDecksColumnUpdateRoles);
+    }
+    if (newTrackId != oldTrackId && newTrackChanged) {
+        refreshTrackRowsInColumn(newTrackId, decksColumn, kDecksColumnUpdateRoles);
     }
 }
 
@@ -1202,6 +1260,144 @@ void BaseTrackTableModel::emitDataChangedForMultipleRowsInColumn(
         QModelIndex bottomRight = index(endRow - 1, column);
         emit dataChanged(topLeft, bottomRight, roles);
     }
+}
+
+void BaseTrackTableModel::rebuildLoadedDeckState() {
+    m_loadedDecksByTrackId.clear();
+
+    if (fieldIndex(ColumnCache::COLUMN_LIBRARYTABLE_LOADED_DECK) < 0) {
+        return;
+    }
+
+    const auto loadedTracks = PlayerInfo::instance().getLoadedTracks();
+    for (auto it = loadedTracks.cbegin(); it != loadedTracks.cend(); ++it) {
+        int deckNumber = 0;
+        if (!PlayerManager::isDeckGroup(it.key(), &deckNumber)) {
+            continue;
+        }
+        const TrackId trackId = doGetTrackId(it.value());
+        if (!trackId.isValid()) {
+            continue;
+        }
+        addLoadedDeck(trackId, deckNumber);
+    }
+}
+
+void BaseTrackTableModel::refreshTrackRowsInColumn(
+        TrackId trackId,
+        int column,
+        const QVector<int>& roles) {
+    if (!trackId.isValid() || column < 0) {
+        return;
+    }
+
+    const auto rows = getTrackRows(trackId);
+    if (rows.isEmpty()) {
+        return;
+    }
+
+    emitDataChangedForMultipleRowsInColumn(rows, column, roles);
+}
+
+bool BaseTrackTableModel::addLoadedDeck(
+        TrackId trackId,
+        int deckNumber) {
+    if (!trackId.isValid()) {
+        return false;
+    }
+
+    const auto bitMask = deckBitMask(deckNumber);
+    if (bitMask == 0) {
+        return false;
+    }
+
+    auto& deckState = m_loadedDecksByTrackId[trackId];
+    if ((deckState.deckMask & bitMask) != 0) {
+        return false;
+    }
+
+    deckState.deckMask |= bitMask;
+    updateLoadedDeckText(trackId);
+    return true;
+}
+
+bool BaseTrackTableModel::removeLoadedDeck(
+        TrackId trackId,
+        int deckNumber) {
+    if (!trackId.isValid()) {
+        return false;
+    }
+
+    const auto bitMask = deckBitMask(deckNumber);
+    if (bitMask == 0) {
+        return false;
+    }
+
+    auto it = m_loadedDecksByTrackId.find(trackId);
+    if (it == m_loadedDecksByTrackId.end()) {
+        return false;
+    }
+
+    if ((it->deckMask & bitMask) == 0) {
+        return false;
+    }
+
+    it->deckMask &= ~bitMask;
+    if (it->deckMask == 0) {
+        m_loadedDecksByTrackId.erase(it);
+        return true;
+    }
+
+    updateLoadedDeckText(trackId);
+    return true;
+}
+
+QString BaseTrackTableModel::loadedDeckDisplayText(
+        TrackId trackId) const {
+    const auto it = m_loadedDecksByTrackId.constFind(trackId);
+    if (it == m_loadedDecksByTrackId.cend()) {
+        return QString();
+    }
+    return it->displayText;
+}
+
+QString BaseTrackTableModel::loadedDeckToolTipText(
+        TrackId trackId) const {
+    const auto it = m_loadedDecksByTrackId.constFind(trackId);
+    if (it == m_loadedDecksByTrackId.cend()) {
+        return QString();
+    }
+    return it->toolTipText;
+}
+
+TrackId BaseTrackTableModel::loadedDeckStateTrackId(
+        const QModelIndex& index) const {
+    return TrackId(rawSiblingValue(
+            index,
+            ColumnCache::COLUMN_LIBRARYTABLE_ID));
+}
+
+void BaseTrackTableModel::updateLoadedDeckText(
+        TrackId trackId) {
+    auto it = m_loadedDecksByTrackId.find(trackId);
+    if (it == m_loadedDecksByTrackId.end()) {
+        return;
+    }
+
+    const auto deckMask = it->deckMask;
+    QStringList labels;
+    QStringList toolTipLabels;
+    labels.reserve(kMaxNumberOfDecks);
+    toolTipLabels.reserve(kMaxNumberOfDecks);
+    for (int deckNumber = 1; deckNumber <= kMaxNumberOfDecks; ++deckNumber) {
+        if ((deckMask & deckBitMask(deckNumber)) == 0) {
+            continue;
+        }
+        labels.append(QString::number(deckNumber));
+        toolTipLabels.append(tr("Deck %1").arg(deckNumber));
+    }
+    it->displayText = labels.join(QLatin1Char(','));
+    it->toolTipText = toolTipLabels.join(QStringLiteral(", "));
 }
 
 TrackPointer BaseTrackTableModel::getTrackByRef(
