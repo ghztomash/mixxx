@@ -98,6 +98,7 @@ class Library: public QObject {
     void setFont(const QFont& font);
     void setRowHeight(int rowHeight);
     void setEditMetadataSelectedClick(bool enable);
+    void updateTrackTableViews() const;
 
     /// Switches to the internal track collection view
     /// and focuses the search box.
