@@ -2922,6 +2922,7 @@ if(BUILD_TESTING)
     src/test/rekordboxoverview_test.cpp
     src/test/rangelist_test.cpp
     src/test/readaheadmanager_test.cpp
+    src/test/rekordboxcoverartutils_test.cpp
     src/test/replaygaintest.cpp
     src/test/rescalertest.cpp
     src/test/rgbcolor_test.cpp

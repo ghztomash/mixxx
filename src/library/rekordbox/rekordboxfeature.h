@@ -57,6 +57,7 @@ class RekordboxPlaylistModel : public BaseExternalPlaylistModel {
     QVector<int> getAnalyzePathRows(const QString& analyzePath) const;
     TrackPointer getTrack(const QModelIndex& index) const override;
     Qt::ItemFlags flags(const QModelIndex& index) const override;
+    CoverInfo getCoverInfo(const QModelIndex& index) const override;
     bool isColumnHiddenByDefault(int column) override;
     bool isColumnInternal(int column) override;
     void select() override;
