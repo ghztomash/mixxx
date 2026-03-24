@@ -760,6 +760,20 @@ void Library::setEditMetadataSelectedClick(bool enabled) {
     emit setSelectedClick(enabled);
 }
 
+void Library::updateTrackTableViews() const {
+    if (!m_pLibraryWidget) {
+        return;
+    }
+
+    const auto trackTableViews = m_pLibraryWidget->findChildren<WTrackTableView*>();
+    for (auto* pTrackTableView : trackTableViews) {
+        pTrackTableView->update();
+        if (auto* pViewport = pTrackTableView->viewport()) {
+            pViewport->update();
+        }
+    }
+}
+
 void Library::slotSearchInCurrentView() {
     m_pLibraryControl->setLibraryFocus(FocusWidget::Searchbar, Qt::ShortcutFocusReason);
 }

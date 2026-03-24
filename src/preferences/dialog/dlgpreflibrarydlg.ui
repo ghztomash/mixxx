@@ -291,6 +291,14 @@
       </item>
 
       <item row="10" column="0" colspan="4">
+       <widget class="QCheckBox" name="checkbox_highlight_track_color_rows">
+        <property name="text">
+         <string>Highlight rows with track color</string>
+        </property>
+       </widget>
+      </item>
+
+      <item row="11" column="0" colspan="4">
        <widget class="QCheckBox" name="checkbox_played_track_color">
         <property name="text">
          <string>Grey out played tracks</string>
@@ -298,7 +306,7 @@
        </widget>
       </item>
 
-      <item row="11" column="0" colspan="4">
+      <item row="12" column="0" colspan="4">
        <widget class="QCheckBox" name="checkbox_loaded_track_color">
         <property name="text">
          <string>Highlight loaded tracks</string>
@@ -306,7 +314,7 @@
        </widget>
       </item>
 
-      <item row="12" column="0">
+      <item row="13" column="0">
        <widget class="QLabel" name="label_dateFormat">
         <property name="text">
          <string>Date Format:</string>
@@ -316,7 +324,7 @@
         </property>
        </widget>
       </item>
-      <item row="12" column="1" colspan="3">
+      <item row="13" column="1" colspan="3">
        <layout class="QHBoxLayout" name="horizontalLayout_dateFormat">
         <property name="leftMargin">
          <number>0</number>
@@ -790,6 +798,7 @@
   <tabstop>spinBox_row_height</tabstop>
   <tabstop>btn_library_font</tabstop>
   <tabstop>spinbox_bpm_precision</tabstop>
+  <tabstop>checkbox_highlight_track_color_rows</tabstop>
   <tabstop>checkbox_played_track_color</tabstop>
   <tabstop>checkbox_loaded_track_color</tabstop>
   <tabstop>comboBox_dateFormat</tabstop>

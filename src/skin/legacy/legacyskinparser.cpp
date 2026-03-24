@@ -1690,6 +1690,12 @@ QWidget* LegacySkinParser::parseLibrary(const QDomElement& node) {
     ColorPalette colorPalette = colorPaletteSettings.getTrackColorPalette();
     BaseTrackTableModel::setKeyColorPalette(colorPaletteSettings.getConfigKeyColorPalette());
 
+    const auto applyTrackColorToRows =
+            m_pConfig->getValue(
+                    mixxx::library::prefs::kApplyTrackColorToRowsConfigKey,
+                    BaseTrackTableModel::kApplyTrackColorToRowsDefault);
+    BaseTrackTableModel::setApplyTrackColorToRows(applyTrackColorToRows);
+
     const auto applyPlayedTrackColor =
             m_pConfig->getValue(
                     mixxx::library::prefs::kApplyPlayedTrackColorConfigKey,

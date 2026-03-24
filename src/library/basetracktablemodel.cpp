@@ -137,6 +137,13 @@ bool BaseTrackTableModel::s_bApplyPlayedTrackColor =
 bool BaseTrackTableModel::s_bApplyLoadedTrackColor =
         kApplyLoadedTrackColorDefault;
 
+bool BaseTrackTableModel::s_bApplyTrackColorToRows =
+        kApplyTrackColorToRowsDefault;
+
+void BaseTrackTableModel::setApplyTrackColorToRows(bool apply) {
+    s_bApplyTrackColorToRows = apply;
+}
+
 void BaseTrackTableModel::setApplyPlayedTrackColor(bool apply) {
     s_bApplyPlayedTrackColor = apply;
 }
@@ -453,6 +460,9 @@ QVariant BaseTrackTableModel::data(
     }
 
     if (role == Qt::BackgroundRole) {
+        if (!s_bApplyTrackColorToRows) {
+            return QVariant();
+        }
         const auto rgbColorValue = rawSiblingValue(
                 index,
                 ColumnCache::COLUMN_LIBRARYTABLE_COLOR);

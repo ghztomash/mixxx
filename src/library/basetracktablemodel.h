@@ -131,6 +131,9 @@ class BaseTrackTableModel : public QAbstractTableModel, public TrackModel {
 
     static void setKeyColorPalette(const ColorPalette& palette);
 
+    static constexpr bool kApplyTrackColorToRowsDefault = true;
+    static void setApplyTrackColorToRows(bool apply);
+
     static constexpr bool kApplyPlayedTrackColorDefault = true;
     static void setApplyPlayedTrackColor(bool apply);
 
@@ -369,6 +372,7 @@ class BaseTrackTableModel : public QAbstractTableModel, public TrackModel {
     // initialization order issues
     static std::optional<ColorPalette> s_keyColorPalette;
 
+    static bool s_bApplyTrackColorToRows;
     static bool s_bApplyPlayedTrackColor;
     static bool s_bApplyLoadedTrackColor;
     static QString s_dateFormat;
