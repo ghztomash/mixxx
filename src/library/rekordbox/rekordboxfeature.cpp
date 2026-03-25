@@ -94,7 +94,7 @@ bool createLibraryTable(QSqlDatabase& database, const QString& tableName) {
             "    bpm FLOAT,"
             "    key TEXT,"
             "    rating INTEGER,"
-            "    analyze_path TEXT UNIQUE,"
+            "    analyze_path TEXT,"
             "    device TEXT,"
             "    color INTEGER"
             ");");
@@ -105,6 +105,31 @@ bool createLibraryTable(QSqlDatabase& database, const QString& tableName) {
     }
 
     return true;
+}
+
+int findTrackId(
+        QSqlDatabase& database,
+        int rbID,
+        const QString& device) {
+    int trackID = -1;
+    QSqlQuery finderQuery(database);
+    finderQuery.prepare("select id from " + kRekordboxLibraryTable +
+            " where rb_id=:rb_id and device=:device");
+    finderQuery.bindValue(":rb_id", rbID);
+    finderQuery.bindValue(":device", device);
+
+    if (!finderQuery.exec()) {
+        LOG_FAILED_QUERY(finderQuery)
+                << "rbID:" << rbID
+                << "device:" << device;
+        return trackID;
+    }
+
+    if (finderQuery.next()) {
+        trackID = finderQuery.value(finderQuery.record().indexOf("id")).toInt();
+    }
+
+    return trackID;
 }
 
 bool createPlaylistsTable(QSqlDatabase& database, const QString& tableName) {
@@ -349,7 +374,7 @@ mixxx::RgbColor colorFromID(int colorID) {
     return kColorForIDNoColor;
 }
 
-void insertTrack(
+bool insertTrack(
         QSqlDatabase& database,
         rekordbox_pdb_t::track_row_t* track,
         QSqlQuery& query,
@@ -399,22 +424,16 @@ void insertTrack(
 
     if (!query.exec()) {
         LOG_FAILED_QUERY(query);
+        return false;
     }
 
-    int trackID = -1;
-    QSqlQuery finderQuery(database);
-    finderQuery.prepare("select id from " + kRekordboxLibraryTable +
-            " where rb_id=:rb_id and device=:device");
-    finderQuery.bindValue(":rb_id", rbID);
-    finderQuery.bindValue(":device", device);
-
-    if (!finderQuery.exec()) {
-        LOG_FAILED_QUERY(finderQuery)
-                << "rbID:" << rbID;
-    }
-
-    if (finderQuery.next()) {
-        trackID = finderQuery.value(finderQuery.record().indexOf("id")).toInt();
+    const int trackID = findTrackId(database, rbID, device);
+    if (trackID < 0) {
+        qWarning() << "Skipping Rekordbox playlist entry for track with invalid id"
+                   << "rbID:" << rbID
+                   << "device:" << device
+                   << "title:" << title;
+        return false;
     }
 
     // Insert into device all tracks playlist
@@ -426,6 +445,8 @@ void insertTrack(
                 << "trackID:" << trackID
                 << "position:" << audioFilesCount;
     }
+
+    return true;
 }
 
 void buildPlaylistTree(
@@ -579,20 +600,20 @@ QString parseDeviceDB(mixxx::DbConnectionPoolPtr dbConnectionPool, TreeItem* dev
                                                                 ->track_id();
                                     } break;
                                     case rekordbox_pdb_t::PAGE_TYPE_TRACKS: {
-                                        insertTrack(database,
-                                                static_cast<rekordbox_pdb_t::track_row_t*>(
-                                                        rowRef->body()),
-                                                query,
-                                                queryInsertIntoDevicePlaylistTracks,
-                                                artistsMap,
-                                                albumsMap,
-                                                genresMap,
-                                                keysMap,
-                                                devicePath,
-                                                device,
-                                                audioFilesCount);
-
-                                        audioFilesCount++;
+                                        if (insertTrack(database,
+                                                    static_cast<rekordbox_pdb_t::track_row_t*>(
+                                                            rowRef->body()),
+                                                    query,
+                                                    queryInsertIntoDevicePlaylistTracks,
+                                                    artistsMap,
+                                                    albumsMap,
+                                                    genresMap,
+                                                    keysMap,
+                                                    devicePath,
+                                                    device,
+                                                    audioFilesCount)) {
+                                            audioFilesCount++;
+                                        }
                                     } break;
                                     case rekordbox_pdb_t::PAGE_TYPE_PLAYLIST_TREE: {
                                         auto* playlistTree =
@@ -719,22 +740,13 @@ void buildPlaylistTree(
                     trackIndex++) {
                 uint32_t rbTrackID = playlistTrackMap[childID][trackIndex];
 
-                int trackID = -1;
-                QSqlQuery finderQuery(database);
-                finderQuery.prepare("select id from " + kRekordboxLibraryTable +
-                        " where rb_id=:rb_id and device=:device");
-                finderQuery.bindValue(":rb_id", rbTrackID);
-                finderQuery.bindValue(":device", device);
-
-                if (!finderQuery.exec()) {
-                    LOG_FAILED_QUERY(finderQuery)
-                            << "rbTrackID:" << rbTrackID
-                            << "device:" << device;
-                    return;
-                }
-
-                if (finderQuery.next()) {
-                    trackID = finderQuery.value(finderQuery.record().indexOf("id")).toInt();
+                const int trackID = findTrackId(database, rbTrackID, device);
+                if (trackID < 0) {
+                    qWarning() << "Skipping Rekordbox playlist track for missing imported track"
+                               << "rbTrackID:" << rbTrackID
+                               << "device:" << device
+                               << "playlist:" << currentPath;
+                    continue;
                 }
 
                 queryInsertIntoPlaylistTracks.bindValue(":playlist_id", playlistID);
