@@ -99,7 +99,7 @@ RateControl::RateControl(const QString& group, UserSettingsPointer pConfig)
           m_pJog(std::make_unique<ControlObject>(
                   ConfigKey(group, QStringLiteral("jog")))),
           // FIXME: The filter length should be dependent on sample rate/block size or something
-          m_pJogFilter(std::make_unique<Rotary>(25)),
+          m_pJogFilter(std::make_unique<Rotary>(6)),
           m_pVCEnabled(nullptr),
           m_pVCScratching(nullptr),
           m_pVCMode(nullptr),
