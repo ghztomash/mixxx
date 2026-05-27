@@ -19,8 +19,12 @@ jobs:
     container:
       image: ${{ matrix.container }}
     env:
+      CC: /usr/bin/gcc-13
+      CXX: /usr/bin/g++-13
       CCACHE_DIR: ${{ github.workspace }}/.ccache
       DEBIAN_FRONTEND: noninteractive
+      LANG: C.UTF-8
+      LC_ALL: C.UTF-8
     strategy:
       fail-fast: false
       matrix:
@@ -36,7 +40,7 @@ jobs:
       - name: Prepare Debian container
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates git sudo xz-utils zstd
+          apt-get install -y --no-install-recommends ca-certificates g++-13 gcc-13 git sudo xz-utils zstd
           if [ -f /etc/apt/sources.list.d/debian.sources ]; then
             sed -i -E 's/Components: main$/Components: main contrib non-free non-free-firmware/' /etc/apt/sources.list.d/debian.sources
           fi
@@ -85,6 +89,8 @@ jobs:
           -DMODPLUG=ON
           -DWAVPACK=ON
           -DINSTALL_USER_UDEV_RULES=OFF
+          -DCMAKE_C_COMPILER=/usr/bin/gcc-13
+          -DCMAKE_CXX_COMPILER=/usr/bin/g++-13
           -DCMAKE_BUILD_TYPE=RelWithDebInfo
           -DWARNINGS_FATAL=ON
           -DDEBUG_ASSERTIONS_FATAL=OFF
