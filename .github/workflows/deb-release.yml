@@ -102,7 +102,7 @@ jobs:
           -DLILV=ON
           -DOPUS=ON
           -DQTKEYCHAIN=OFF
-          -DVINYLCONTROL=OFF
+          -DVINYLCONTROL=ON
           -DSTEM=OFF
           -DBUILD_TESTING=OFF
           -DBUILD_BENCH=OFF
