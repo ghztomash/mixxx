@@ -127,6 +127,7 @@ jobs:
         working-directory: build
 
       - name: Validate package architecture
+        shell: bash
         run: |
           set -euo pipefail
           shopt -s nullglob
