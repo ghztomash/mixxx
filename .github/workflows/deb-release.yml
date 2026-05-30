@@ -142,12 +142,10 @@ jobs:
             printf 'Expected Architecture %s, got %s\n' "${{ matrix.deb_arch }}" "$arch"
             exit 1
           fi
-          sha256sum "${debs[0]}" > build/SHA256SUMS
 
       - name: Upload package artifact
         uses: actions/upload-artifact@v7.0.1
         with:
           name: ${{ matrix.artifact_name }}
-          path: |
-            build/*.deb
-            build/SHA256SUMS
+          archive: "false"
+          path: build/*.deb
