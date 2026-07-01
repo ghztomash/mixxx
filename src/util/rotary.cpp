@@ -1,24 +1,52 @@
 #include "util/rotary.h"
 
-#include <numeric>
+#include <algorithm>
+
+Rotary::Rotary(qsizetype filterLength, qsizetype maxFilterLength)
+        : m_filterHistory(maxFilterLength, 0.0),
+          m_filterLength{static_cast<index_type>(filterLength)},
+          m_headIndex{0},
+          m_filterSum{0.0} {
+    DEBUG_ASSERT(filterLength > 0);
+    DEBUG_ASSERT(maxFilterLength >= filterLength);
+}
 
 Rotary::index_type Rotary::nextIndex(Rotary::index_type i) const {
-    if (++i >= m_filterHistory.size()) {
+    if (++i >= m_filterLength) {
         return 0;
     }
     return i;
 }
 
+void Rotary::setFilterLength(qsizetype filterLength) {
+    DEBUG_ASSERT(filterLength > 0);
+    DEBUG_ASSERT(static_cast<index_type>(filterLength) <= m_filterHistory.size());
+    const index_type boundedFilterLength = std::clamp<index_type>(
+            static_cast<index_type>(filterLength),
+            1,
+            m_filterHistory.size());
+    if (boundedFilterLength == m_filterLength) {
+        return;
+    }
+    m_filterLength = boundedFilterLength;
+    reset();
+}
+
+void Rotary::reset() {
+    std::fill(std::begin(m_filterHistory), std::end(m_filterHistory), 0.0);
+    m_headIndex = 0;
+    m_filterSum = 0.0;
+}
+
 void Rotary::append(double v) {
     m_headIndex = nextIndex(m_headIndex);
+    m_filterSum -= m_filterHistory[m_headIndex];
     m_filterHistory[m_headIndex] = v;
+    m_filterSum += v;
 }
 
 double Rotary::calculate() const {
-    return std::accumulate(std::cbegin(m_filterHistory),
-                   std::cend(m_filterHistory),
-                   0.0) /
-            static_cast<double>(m_filterHistory.size());
+    return m_filterSum / static_cast<double>(m_filterLength);
 }
 
 /* Note: There's probably a bug in this function (or this class) somewhere.

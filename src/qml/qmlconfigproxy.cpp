@@ -43,6 +43,7 @@ const QString kConfigGroup = QStringLiteral("[Config]");
 const QString kControlGroup = QStringLiteral("[Control]");
 const QString kLibraryGroup = QStringLiteral("[Library]");
 const QString kBpmGroup = QStringLiteral("[BPM]");
+const QString kControlsGroup = QStringLiteral("[Controls]");
 
 const QString kMultiSamplingKey = QStringLiteral("multi_sampling");
 const QString k3DHardwareAccelerationKey = QStringLiteral("force_hardware_acceleration");
@@ -84,6 +85,7 @@ const QString kRatePermFineKey = QStringLiteral("RatePermRight");
 const QString kRateRangeKey = QStringLiteral("RateRangePercent");
 const QString kRateDirKey = QStringLiteral("RateDir");
 const QString kRateRampKey = QStringLiteral("RateRamp");
+const QString kJogWheelFilterLengthKey = QStringLiteral("JogWheelFilterLength");
 
 // Config group
 const QString kHotcueColorPaletteKey = QStringLiteral("HotcueColorPalette");
@@ -286,6 +288,23 @@ PROPERTY_IMPL(kControlGroup,
         RateControl::RampMode,
         controlPitchBendBehaviour,
         RateControl::RampMode::Stepping);
+
+int QmlConfigProxy::controlJogWheelFilterLength() const {
+    return RateControl::sanitizeJogFilterLength(m_pConfig->getValue(
+            ConfigKey(kControlsGroup, kJogWheelFilterLengthKey),
+            RateControl::kJogFilterLengthDefault));
+}
+
+void QmlConfigProxy::set_controlJogWheelFilterLength(int value) {
+    const int filterLength = RateControl::sanitizeJogFilterLength(value);
+    RateControl::setJogFilterLength(filterLength);
+    if (filterLength == RateControl::kJogFilterLengthDefault) {
+        m_pConfig->remove(ConfigKey(kControlsGroup, kJogWheelFilterLengthKey));
+    } else {
+        m_pConfig->setValue(ConfigKey(kControlsGroup, kJogWheelFilterLengthKey), filterLength);
+    }
+    emit controlJogWheelFilterLengthChanged();
+}
 
 // Config group
 PROPERTY_IMPL(kConfigGroup,

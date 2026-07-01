@@ -38,6 +38,7 @@ Category {
         sliderOrientationInput.selected = Mixxx.Config.controlRateDir === -1 ? "down" : "up";
         keylockModeInput.selected = keylockModeInput.options[Mixxx.Config.controlKeylockMode];
         keyunlockModeInput.selected = keyunlockModeInput.options[Mixxx.Config.controlKeyunlockMode];
+        jogWheelFilterLengthInput.value = Mixxx.Config.controlJogWheelFilterLength;
         pitchBendBehaviourInput.selected = pitchBendBehaviourInput.options[Mixxx.Config.controlPitchBendBehaviour];
         adjustmentButtonsTemporaryCoarseInput.value = Mixxx.Config.controlRateTempCoarse * 100;
         adjustmentButtonsTemporaryFineInput.value = Mixxx.Config.controlRateTempFine * 100;
@@ -105,6 +106,7 @@ Category {
         Mixxx.Config.controlRateDir = sliderOrientationInput.selected === "down" ? -1 : 1;
         Mixxx.Config.controlKeylockMode = keylockModeInput.options.indexOf(keylockModeInput.selected);
         Mixxx.Config.controlKeyunlockMode = keyunlockModeInput.options.indexOf(keyunlockModeInput.selected);
+        Mixxx.Config.controlJogWheelFilterLength = jogWheelFilterLengthInput.value;
         Mixxx.Config.controlPitchBendBehaviour = pitchBendBehaviourInput.options.indexOf(pitchBendBehaviourInput.selected);
         Mixxx.Config.controlRateTempCoarse = adjustmentButtonsTemporaryCoarseInput.value / 100;
         Mixxx.Config.controlRateTempFine = adjustmentButtonsTemporaryFineInput.value / 100;
@@ -1362,6 +1364,35 @@ Category {
                                         options: ["reset key", "keep key"]
 
                                         onSelectedChanged: decksTab.dirty = true
+                                    }
+                                }
+                                RowLayout {
+                                    Layout.preferredWidth: speedKeyPane.width * 0.5
+
+                                    Mixxx.SettingParameter {
+                                        Layout.fillWidth: true
+                                        label: "Jogwheel filter length"
+
+                                        Text {
+                                            anchors.fill: parent
+                                            color: Theme.white
+                                            font.pixelSize: 14
+                                            font.weight: Font.Medium
+                                            horizontalAlignment: Text.AlignLeft
+                                            text: parent.label
+                                            verticalAlignment: Text.AlignVCenter
+                                        }
+                                    }
+                                    SettingComponents.SpinBox {
+                                        id: jogWheelFilterLengthInput
+
+                                        Layout.fillWidth: true
+                                        max: 64
+                                        min: 1
+                                        precision: 0
+                                        realValue: 6
+
+                                        onValueChanged: decksTab.dirty = true
                                     }
                                 }
                                 RowLayout {

@@ -1,6 +1,7 @@
 #include "preferences/dialog/dlgprefdeck.h"
 
 #include <QDoubleSpinBox>
+#include <QSpinBox>
 
 #include "control/controlobject.h"
 #include "control/controlproxy.h"
@@ -304,6 +305,20 @@ DlgPrefDeck::DlgPrefDeck(QWidget* parent, UserSettingsPointer pConfig)
         pControl->set(static_cast<int>(m_keyunlockMode));
     }
 
+    m_iJogFilterLength = RateControl::sanitizeJogFilterLength(
+            m_pConfig->getValue(
+                    ConfigKey(kControlsGroup, QStringLiteral("JogWheelFilterLength")),
+                    RateControl::kJogFilterLengthDefault));
+    spinBoxJogWheelFilterLength->setRange(
+            RateControl::kJogFilterLengthMin,
+            RateControl::kJogFilterLengthMax);
+    spinBoxJogWheelFilterLength->setValue(m_iJogFilterLength);
+    RateControl::setJogFilterLength(m_iJogFilterLength);
+    connect(spinBoxJogWheelFilterLength,
+            QOverload<int>::of(&QSpinBox::valueChanged),
+            this,
+            &DlgPrefDeck::slotJogFilterLengthSpinbox);
+
     // Cue Mode
     // Add "(?)" with a manual link to the label
     labelCueMode->setText(labelCueMode->text() + QChar(' ') +
@@ -521,6 +536,7 @@ void DlgPrefDeck::slotUpdate() {
     spinBoxTemporaryRateFine->setValue(RateControl::getTemporaryRateChangeFineAmount());
     spinBoxPermanentRateCoarse->setValue(RateControl::getPermanentRateChangeCoarseAmount());
     spinBoxPermanentRateFine->setValue(RateControl::getPermanentRateChangeFineAmount());
+    spinBoxJogWheelFilterLength->setValue(RateControl::getJogFilterLength());
 }
 
 void DlgPrefDeck::slotResetToDefaults() {
@@ -564,6 +580,8 @@ void DlgPrefDeck::slotResetToDefaults() {
 
     radioButtonOriginalKey->setChecked(true);
     radioButtonResetUnlockedKey->setChecked(true);
+
+    spinBoxJogWheelFilterLength->setValue(RateControl::kJogFilterLengthDefault);
 }
 
 void DlgPrefDeck::slotMoveIntroStartCheckbox(bool checked) {
@@ -663,6 +681,10 @@ void DlgPrefDeck::slotRatePermCoarseSpinbox(double value) {
 
 void DlgPrefDeck::slotRatePermFineSpinbox(double value) {
     m_dRatePermFine = value;
+}
+
+void DlgPrefDeck::slotJogFilterLengthSpinbox(int value) {
+    m_iJogFilterLength = value;
 }
 
 void DlgPrefDeck::slotRateRampSensitivitySlider(int value) {
@@ -766,6 +788,11 @@ void DlgPrefDeck::slotApply() {
     for (ControlProxy* pControl : std::as_const(m_keyunlockModeControls)) {
         pControl->set(static_cast<double>(m_keyunlockMode));
     }
+
+    RateControl::setJogFilterLength(m_iJogFilterLength);
+    m_pConfig->setValue(
+            ConfigKey(kControlsGroup, QStringLiteral("JogWheelFilterLength")),
+            RateControl::getJogFilterLength());
 
     RateControl::setRateRampMode(m_bRateRamping);
     m_pConfig->setValue(ConfigKey(kControlsGroup, QStringLiteral("RateRamp")), m_bRateRamping);

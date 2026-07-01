@@ -18,6 +18,9 @@
 namespace {
 constexpr int kRateSensitivityMin = 100;
 constexpr int kRateSensitivityMax = 2500;
+const ConfigKey kJogFilterLengthConfigKey(
+        QStringLiteral("[Controls]"),
+        QStringLiteral("JogWheelFilterLength"));
 } // namespace
 
 // Static default values for rate buttons (percents)
@@ -25,6 +28,8 @@ ControlValueAtomic<double> RateControl::m_dTemporaryRateChangeCoarse;
 ControlValueAtomic<double> RateControl::m_dTemporaryRateChangeFine;
 ControlValueAtomic<double> RateControl::m_dPermanentRateChangeCoarse;
 ControlValueAtomic<double> RateControl::m_dPermanentRateChangeFine;
+ControlValueAtomic<int> RateControl::m_iJogFilterLength{
+        RateControl::kJogFilterLengthDefault};
 int RateControl::m_iRateRampSensitivity;
 RateControl::RampMode RateControl::m_eRateRampMode;
 
@@ -99,7 +104,10 @@ RateControl::RateControl(const QString& group, UserSettingsPointer pConfig)
           m_pJog(std::make_unique<ControlObject>(
                   ConfigKey(group, QStringLiteral("jog")))),
           // FIXME: The filter length should be dependent on sample rate/block size or something
-          m_pJogFilter(std::make_unique<Rotary>(6)),
+          m_pJogFilter(std::make_unique<Rotary>(
+                  kJogFilterLengthDefault,
+                  kJogFilterLengthMax)),
+          m_jogFilterLength(kJogFilterLengthDefault),
           m_pVCEnabled(nullptr),
           m_pVCScratching(nullptr),
           m_pVCMode(nullptr),
@@ -111,6 +119,10 @@ RateControl::RateControl(const QString& group, UserSettingsPointer pConfig)
           m_bTempStarted(false),
           m_tempRateRatio(0.0),
           m_dRateTempRampChange(0.0) {
+    setJogFilterLength(pConfig->getValue(
+            kJogFilterLengthConfigKey,
+            kJogFilterLengthDefault));
+
     // Vinyl control COs are only created for main decks
     if (PlayerManager::isDeckGroup(getGroup())) {
         m_pVCEnabled = ControlObject::getControl(
@@ -243,6 +255,24 @@ void RateControl::setRateRampSensitivity(int sense) {
     } else {
         m_iRateRampSensitivity = sense;
     }
+}
+
+// static
+int RateControl::sanitizeJogFilterLength(int filterLength) {
+    if (filterLength < kJogFilterLengthMin || filterLength > kJogFilterLengthMax) {
+        return kJogFilterLengthDefault;
+    }
+    return filterLength;
+}
+
+// static
+void RateControl::setJogFilterLength(int filterLength) {
+    m_iJogFilterLength.setValue(sanitizeJogFilterLength(filterLength));
+}
+
+// static
+int RateControl::getJogFilterLength() {
+    return m_iJogFilterLength.getValue();
 }
 
 //static
@@ -383,6 +413,11 @@ double RateControl::getJogFactor() const {
         m_pJog->set(0.);
     }
 
+    const int jogFilterLength = getJogFilterLength();
+    if (jogFilterLength != m_jogFilterLength) {
+        m_pJogFilter->setFilterLength(jogFilterLength);
+        m_jogFilterLength = jogFilterLength;
+    }
     double jogValueFiltered = m_pJogFilter->filter(jogValue);
     double jogFactor = jogValueFiltered * jogSensitivity;
 

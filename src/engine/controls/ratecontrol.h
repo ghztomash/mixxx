@@ -39,6 +39,13 @@ public:
       Linear = 1    // pitch moves up/down in a progressively linear fashion
   };
 
+  /// Default number of jog input samples averaged for smoothing.
+  static constexpr int kJogFilterLengthDefault = 6;
+  /// Minimum number of jog input samples averaged for smoothing.
+  static constexpr int kJogFilterLengthMin = 1;
+  /// Maximum number of jog input samples averaged for smoothing.
+  static constexpr int kJogFilterLengthMax = 64;
+
   void setBpmControl(BpmControl* bpmcontrol);
 
   // Returns the current engine rate.  "reportScratching" is used to tell
@@ -70,6 +77,12 @@ public:
   // Set Rate Ramp Sensitivity
   static void setRateRampSensitivity(int);
   static int getRateRampSensitivity();
+  /// Returns a valid jog filter length, or the default for invalid values.
+  static int sanitizeJogFilterLength(int filterLength);
+  /// Set the global jog filter length used by active decks.
+  static void setJogFilterLength(int filterLength);
+  /// Get the global jog filter length used by active decks.
+  static int getJogFilterLength();
   bool isReverseButtonPressed();
   // ReadAheadManager::getNextSamples() notifies us each time the play position
   // wrapped around during one buffer process (beatloop or track repeat) so
@@ -142,6 +155,7 @@ private:
 
   std::unique_ptr<ControlObject> m_pJog;
   std::unique_ptr<Rotary> m_pJogFilter;
+  mutable int m_jogFilterLength;
 
   ControlObject* m_pVCEnabled;
   ControlObject* m_pVCScratching;
@@ -155,6 +169,7 @@ private:
   static ControlValueAtomic<double> m_dTemporaryRateChangeFine;
   static ControlValueAtomic<double> m_dPermanentRateChangeCoarse;
   static ControlValueAtomic<double> m_dPermanentRateChangeFine;
+  static ControlValueAtomic<int> m_iJogFilterLength;
 
   int m_wrapAroundCount;
   mixxx::audio::FramePos m_jumpPos;

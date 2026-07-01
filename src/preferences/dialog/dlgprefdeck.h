@@ -47,6 +47,7 @@ class DlgPrefDeck : public DlgPreferencePage, public Ui::DlgPrefDeckDlg  {
     void slotRateTempFineSpinbox(double);
     void slotRatePermCoarseSpinbox(double);
     void slotRatePermFineSpinbox(double);
+    void slotJogFilterLengthSpinbox(int);
     void slotSetTrackTimeDisplay(QAbstractButton*);
     void slotSetTrackTimeDisplay(double);
     void slotCueModeCombobox(int);
@@ -111,6 +112,7 @@ class DlgPrefDeck : public DlgPreferencePage, public Ui::DlgPrefDeckDlg  {
 
     RateControl::RampMode m_bRateRamping;
     int m_iRateRampSensitivity;
+    int m_iJogFilterLength;
     double m_dRateTempCoarse;
     double m_dRateTempFine;
     double m_dRatePermCoarse;

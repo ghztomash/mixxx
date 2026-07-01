@@ -128,6 +128,9 @@ class QmlConfigProxy : public QObject {
                     controlPitchBendBehaviour WRITE
                             set_controlPitchBendBehaviour NOTIFY
                                     controlPitchBendBehaviourChanged);
+    Q_PROPERTY(int controlJogWheelFilterLength READ controlJogWheelFilterLength
+                    WRITE set_controlJogWheelFilterLength NOTIFY
+                            controlJogWheelFilterLengthChanged);
     // Config group
     Q_PROPERTY(QString configHotcueColorPalette READ configHotcueColorPalette
                     WRITE set_configHotcueColorPalette NOTIFY
@@ -231,6 +234,7 @@ class QmlConfigProxy : public QObject {
     // If true, down increases
     PROPERTY_DECL_ACCESSOR(bool, controlRateDir);
     PROPERTY_DECL_ACCESSOR(RateControl::RampMode, controlPitchBendBehaviour);
+    PROPERTY_DECL_ACCESSOR(int, controlJogWheelFilterLength);
 
     // Config group
     PROPERTY_DECL_ACCESSOR(QString, configHotcueColorPalette);
@@ -281,6 +285,7 @@ class QmlConfigProxy : public QObject {
     void controlRateRangeChanged();
     void controlRateDirChanged();
     void controlPitchBendBehaviourChanged();
+    void controlJogWheelFilterLengthChanged();
     void configHotcueColorPaletteChanged();
     void configTrackColorPaletteChanged();
     void configKeyColorPaletteChanged();
