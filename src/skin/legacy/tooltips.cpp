@@ -236,6 +236,18 @@ void Tooltips::addStandardTooltips() {
             << tr("Set the channel's crossfader orientation.")
             << tr("Either to the left side of crossfader, to the right side or to the center (unaffected by crossfader)");
 
+    add("quit")
+            << tr("Quit Mixxx")
+            << tr("Quit Mixxx gracefully.");
+
+    add("show_preferences")
+            << tr("Preferences")
+            << tr("Open the Mixxx preferences.");
+
+    add("toggle_fullscreen")
+            << tr("Full Screen")
+            << tr("Toggle full screen mode.");
+
     add("show_microphone")
             << tr("Microphone")
             << tr("Show/hide the Microphone section.");

@@ -100,6 +100,11 @@ class CoreServices : public QObject {
         return m_pScreensaverManager;
     }
 
+    /// Returns controls that expose skin-level UI actions and settings.
+    SkinControls* getSkinControls() const {
+        return m_pSkinControls.get();
+    }
+
     std::shared_ptr<QDialog> makeDlgPreferences() const;
 
   signals:

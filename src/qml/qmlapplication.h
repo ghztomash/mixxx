@@ -8,8 +8,8 @@
 
 class GuiTick;
 class VisualsManager;
-#if defined(Q_OS_ANDROID)
 class QQuickWindow;
+#if defined(Q_OS_ANDROID)
 class APerformanceHintSession;
 #endif
 
@@ -34,6 +34,12 @@ class QmlApplication : public QObject {
 #endif
 
   private:
+    QQuickWindow* rootWindow() const;
+    bool confirmExit();
+    void slotSkinQuitRequested();
+    void slotSkinShowPreferencesRequested();
+    void slotSkinToggleFullscreenRequested();
+
     std::unique_ptr<CoreServices> m_pCoreServices;
     std::unique_ptr<::VisualsManager> m_visualsManager;
 

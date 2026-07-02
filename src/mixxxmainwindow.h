@@ -90,6 +90,7 @@ class MixxxMainWindow : public QMainWindow {
     void initializationProgressUpdate(int progress, const QString& serviceName);
 
   private slots:
+    void slotSkinToggleFullscreenRequested();
     void slotTooltipModeChanged(mixxx::preferences::Tooltips tt);
 
   signals:

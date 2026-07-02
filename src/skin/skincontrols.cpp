@@ -2,12 +2,35 @@
 
 #include <QString>
 
+#include "moc_skincontrols.cpp"
+
 namespace {
 const QString kSkinGroup = QStringLiteral("[Skin]");
 } // namespace
 
 SkinControls::SkinControls()
-        : m_showEffectRack(ConfigKey(kSkinGroup, QStringLiteral("show_effectrack")),
+        : QObject(nullptr),
+          m_quit(ConfigKey(kSkinGroup, QStringLiteral("quit"))),
+          m_quitAvailable(ConfigKey(kSkinGroup, QStringLiteral("quit_available")),
+                  true,
+                  false,
+                  false,
+                  1.0),
+          m_showPreferences(ConfigKey(kSkinGroup, QStringLiteral("show_preferences"))),
+          m_showPreferencesAvailable(
+                  ConfigKey(kSkinGroup, QStringLiteral("show_preferences_available")),
+                  true,
+                  false,
+                  false,
+                  1.0),
+          m_toggleFullscreen(ConfigKey(kSkinGroup, QStringLiteral("toggle_fullscreen"))),
+          m_toggleFullscreenAvailable(
+                  ConfigKey(kSkinGroup, QStringLiteral("toggle_fullscreen_available")),
+                  true,
+                  false,
+                  false,
+                  1.0),
+          m_showEffectRack(ConfigKey(kSkinGroup, QStringLiteral("show_effectrack")),
                   true,
                   true),
           m_showLibraryCoverArt(ConfigKey(kSkinGroup, QStringLiteral("show_library_coverart")),
@@ -43,6 +66,9 @@ SkinControls::SkinControls()
           m_showVinylControl(ConfigKey(kSkinGroup, QStringLiteral("show_vinylcontrol")),
                   true,
                   false) {
+    m_quit.setButtonMode(mixxx::control::ButtonMode::Trigger);
+    m_showPreferences.setButtonMode(mixxx::control::ButtonMode::Trigger);
+    m_toggleFullscreen.setButtonMode(mixxx::control::ButtonMode::Trigger);
     m_showEffectRack.setButtonMode(mixxx::control::ButtonMode::Toggle);
     m_showLibraryCoverArt.setButtonMode(mixxx::control::ButtonMode::Toggle);
     m_showMicrophones.setButtonMode(mixxx::control::ButtonMode::Toggle);
@@ -56,6 +82,16 @@ SkinControls::SkinControls()
     m_showSpinnies.setButtonMode(mixxx::control::ButtonMode::Toggle);
     m_showVinylControl.setButtonMode(mixxx::control::ButtonMode::Toggle);
 
+    m_quitAvailable.setReadOnly();
+    m_showPreferencesAvailable.setReadOnly();
+    m_toggleFullscreenAvailable.setReadOnly();
+
+    m_quit.connectValueChangeRequest(this, &SkinControls::slotQuitRequest);
+    m_showPreferences.connectValueChangeRequest(
+            this, &SkinControls::slotShowPreferencesRequest);
+    m_toggleFullscreen.connectValueChangeRequest(
+            this, &SkinControls::slotToggleFullscreenRequest);
+
     m_showEffectRack.addAlias(ConfigKey(QStringLiteral("[EffectRack1]"), QStringLiteral("show")));
     m_showLibraryCoverArt.addAlias(ConfigKey(
             QStringLiteral("[Library]"), QStringLiteral("show_coverart")));
@@ -67,4 +103,35 @@ SkinControls::SkinControls()
             QStringLiteral("[Samplers]"), QStringLiteral("show_samplers")));
     m_showMaximizedLibrary.addAlias(ConfigKey(
             QStringLiteral("[Master]"), QStringLiteral("maximize_library")));
+}
+
+void SkinControls::setActionRequested(ControlPushButton* pControl, double value) {
+    if (value <= 0.0) {
+        pControl->setAndConfirm(0.0);
+        return;
+    }
+
+    pControl->setAndConfirm(1.0);
+    pControl->setAndConfirm(0.0);
+}
+
+void SkinControls::slotQuitRequest(double value) {
+    setActionRequested(&m_quit, value);
+    if (value > 0.0) {
+        emit quitRequested();
+    }
+}
+
+void SkinControls::slotShowPreferencesRequest(double value) {
+    setActionRequested(&m_showPreferences, value);
+    if (value > 0.0) {
+        emit showPreferencesRequested();
+    }
+}
+
+void SkinControls::slotToggleFullscreenRequest(double value) {
+    setActionRequested(&m_toggleFullscreen, value);
+    if (value > 0.0) {
+        emit toggleFullscreenRequested();
+    }
 }
