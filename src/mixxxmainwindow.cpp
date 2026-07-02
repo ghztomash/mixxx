@@ -47,6 +47,7 @@
 #include "mixer/playermanager.h"
 #include "recording/recordingmanager.h"
 #include "skin/legacy/launchimage.h"
+#include "skin/skincontrols.h"
 #include "skin/skinloader.h"
 #include "soundio/soundmanager.h"
 #include "sources/soundsourceproxy.h"
@@ -345,6 +346,26 @@ void MixxxMainWindow::initialize() {
             &MixxxMainWindow::slotUpdateMenuBarAltKeyConnection,
             Qt::DirectConnection);
 #endif
+
+    SkinControls* pSkinControls = m_pCoreServices->getSkinControls();
+    VERIFY_OR_DEBUG_ASSERT(pSkinControls) {
+        return;
+    }
+    connect(pSkinControls,
+            &SkinControls::quitRequested,
+            this,
+            &MixxxMainWindow::close,
+            Qt::UniqueConnection);
+    connect(pSkinControls,
+            &SkinControls::showPreferencesRequested,
+            this,
+            &MixxxMainWindow::slotOptionsPreferences,
+            Qt::UniqueConnection);
+    connect(pSkinControls,
+            &SkinControls::toggleFullscreenRequested,
+            this,
+            &MixxxMainWindow::slotSkinToggleFullscreenRequested,
+            Qt::UniqueConnection);
 
     // Connect signals to the menubar. Should be done before emit skinLoaded.
     connectMenuBar();
@@ -1126,6 +1147,10 @@ void MixxxMainWindow::slotViewFullScreen(bool toggle) {
     } else {
         showNormal();
     }
+}
+
+void MixxxMainWindow::slotSkinToggleFullscreenRequested() {
+    slotViewFullScreen(!isFullScreen());
 }
 
 void MixxxMainWindow::slotOptionsPreferences() {

@@ -1,16 +1,19 @@
 #include "qmlapplication.h"
 
+#include <QMessageBox>
 #include <QQmlEngineExtensionPlugin>
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QTextDocument>
 
+#include "control/controlobject.h"
 #include "controllers/controllermanager.h"
 #include "mixer/playermanager.h"
 #include "moc_qmlapplication.cpp"
 #include "preferences/configobject.h"
 #include "qml/asyncimageprovider.h"
 #include "qml/qmldlgpreferencesproxy.h"
+#include "skin/skincontrols.h"
 #include "soundio/soundmanager.h"
 #include "util/versionstore.h"
 #include "waveform/visualsmanager.h"
@@ -107,6 +110,26 @@ QmlApplication::QmlApplication(
     QmlDlgPreferencesProxy::s_pInstance =
             std::make_unique<QmlDlgPreferencesProxy>(pDlgPreferences, this);
 
+    SkinControls* pSkinControls = m_pCoreServices->getSkinControls();
+    VERIFY_OR_DEBUG_ASSERT(pSkinControls) {
+        return;
+    }
+    connect(pSkinControls,
+            &SkinControls::quitRequested,
+            this,
+            &QmlApplication::slotSkinQuitRequested,
+            Qt::UniqueConnection);
+    connect(pSkinControls,
+            &SkinControls::showPreferencesRequested,
+            this,
+            &QmlApplication::slotSkinShowPreferencesRequested,
+            Qt::UniqueConnection);
+    connect(pSkinControls,
+            &SkinControls::toggleFullscreenRequested,
+            this,
+            &QmlApplication::slotSkinToggleFullscreenRequested,
+            Qt::UniqueConnection);
+
     const QStringList visualGroups =
             m_pCoreServices->getPlayerManager()->getVisualPlayerGroups();
     for (const QString& group : visualGroups) {
@@ -167,6 +190,114 @@ void QmlApplication::slotFrameSwapped() {
             lastFrameDurationNs);
     m_frameTimer.restart();
 #endif
+}
+
+QQuickWindow* QmlApplication::rootWindow() const {
+    if (!m_pAppEngine) {
+        return nullptr;
+    }
+
+    const QList<QObject*> rootObjects = m_pAppEngine->rootObjects();
+    for (QObject* pObject : rootObjects) {
+        auto* pWindow = qobject_cast<QQuickWindow*>(pObject);
+        if (pWindow) {
+            return pWindow;
+        }
+    }
+    return nullptr;
+}
+
+bool QmlApplication::confirmExit() {
+    bool playing = false;
+    bool playingSampler = false;
+    auto pPlayerManager = m_pCoreServices->getPlayerManager();
+    int deckCount = pPlayerManager->numberOfDecks();
+    int samplerCount = pPlayerManager->numberOfSamplers();
+    for (int i = 0; i < deckCount; ++i) {
+        if (ControlObject::toBool(
+                    ConfigKey(PlayerManager::groupForDeck(i), "play"))) {
+            playing = true;
+            break;
+        }
+    }
+    for (int i = 0; i < samplerCount; ++i) {
+        if (ControlObject::toBool(
+                    ConfigKey(PlayerManager::groupForSampler(i), "play"))) {
+            playingSampler = true;
+            break;
+        }
+    }
+
+    if (playing) {
+        QMessageBox::StandardButton btn = QMessageBox::question(
+                nullptr,
+                tr("Confirm Exit"),
+                tr("A deck is currently playing. Exit Mixxx?"),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::No);
+        if (btn == QMessageBox::No) {
+            return false;
+        }
+    } else if (playingSampler) {
+        QMessageBox::StandardButton btn = QMessageBox::question(
+                nullptr,
+                tr("Confirm Exit"),
+                tr("A sampler is currently playing. Exit Mixxx?"),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::No);
+        if (btn == QMessageBox::No) {
+            return false;
+        }
+    }
+
+    if (QmlDlgPreferencesProxy::s_pInstance &&
+            QmlDlgPreferencesProxy::s_pInstance->isVisible()) {
+        QMessageBox::StandardButton btn = QMessageBox::question(
+                nullptr,
+                tr("Confirm Exit"),
+                tr("The preferences window is still open.") + "<br>" +
+                        tr("Discard any changes and exit Mixxx?"),
+                QMessageBox::Yes | QMessageBox::No,
+                QMessageBox::No);
+        if (btn == QMessageBox::No) {
+            return false;
+        }
+        QmlDlgPreferencesProxy::s_pInstance->close();
+    }
+
+    return true;
+}
+
+void QmlApplication::slotSkinQuitRequested() {
+    if (!confirmExit()) {
+        return;
+    }
+
+    QQuickWindow* pWindow = rootWindow();
+    if (pWindow) {
+        pWindow->close();
+        return;
+    }
+    qApp->quit();
+}
+
+void QmlApplication::slotSkinShowPreferencesRequested() {
+    if (QmlDlgPreferencesProxy::s_pInstance) {
+        QmlDlgPreferencesProxy::s_pInstance->show();
+    }
+}
+
+void QmlApplication::slotSkinToggleFullscreenRequested() {
+    QQuickWindow* pWindow = rootWindow();
+    if (!pWindow) {
+        return;
+    }
+
+    if (pWindow->visibility() == QWindow::FullScreen) {
+        pWindow->showNormal();
+    } else {
+        pWindow->showFullScreen();
+    }
 }
 
 QmlApplication::~QmlApplication() {

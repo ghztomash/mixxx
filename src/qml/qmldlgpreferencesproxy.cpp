@@ -13,6 +13,16 @@ QmlDlgPreferencesProxy::QmlDlgPreferencesProxy(
           m_pDlgPreferences(pDlgPreferences) {
 }
 
+bool QmlDlgPreferencesProxy::isVisible() const {
+    return m_pDlgPreferences && m_pDlgPreferences->isVisible();
+}
+
+void QmlDlgPreferencesProxy::close() {
+    if (m_pDlgPreferences) {
+        m_pDlgPreferences->close();
+    }
+}
+
 void QmlDlgPreferencesProxy::show() {
     m_pDlgPreferences->show();
 }

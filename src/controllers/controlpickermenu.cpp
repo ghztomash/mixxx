@@ -1468,6 +1468,23 @@ ControlPickerMenu::ControlPickerMenu(QWidget* pParent)
     // Skin Controls
     QMenu* pGuiMenu = addSubmenu(tr("User Interface"));
     addControl("[Skin]",
+            "quit",
+            tr("Quit Mixxx"),
+            tr("Quit Mixxx gracefully"),
+            pGuiMenu);
+    addControl("[Skin]",
+            "show_preferences",
+            tr("Show Preferences"),
+            tr("Open the Mixxx preferences"),
+            pGuiMenu);
+    addControl("[Skin]",
+            "toggle_fullscreen",
+            tr("Toggle Full Screen"),
+            tr("Toggle full screen mode"),
+            pGuiMenu);
+    pGuiMenu->addSeparator();
+
+    addControl("[Skin]",
             "show_samplers",
             tr("Samplers Show/Hide"),
             tr("Show/hide the sampler section"),

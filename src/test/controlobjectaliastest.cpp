@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <QSignalSpy>
 #include <QString>
 #include <gsl/pointers>
 
@@ -197,6 +198,62 @@ TEST_F(ControlObjectAliasTest, SkinControls) {
     auto showSamplersLegacy = ControlProxy(
             ConfigKey(QStringLiteral("[Samplers]"), QStringLiteral("show_samplers")));
     EXPECT_DOUBLE_EQ(showSamplers.get(), showSamplersLegacy.get());
+}
+
+TEST_F(ControlObjectAliasTest, SkinControlActions) {
+    auto skinControls = SkinControls();
+
+    QSignalSpy quitSpy(&skinControls, &SkinControls::quitRequested);
+    QSignalSpy preferencesSpy(&skinControls, &SkinControls::showPreferencesRequested);
+    QSignalSpy fullscreenSpy(&skinControls, &SkinControls::toggleFullscreenRequested);
+
+    auto quit = ControlProxy(ConfigKey(kSkinGroup, QStringLiteral("quit")));
+    auto showPreferences =
+            ControlProxy(ConfigKey(kSkinGroup, QStringLiteral("show_preferences")));
+    auto toggleFullscreen =
+            ControlProxy(ConfigKey(kSkinGroup, QStringLiteral("toggle_fullscreen")));
+
+    quit.set(0.0);
+    showPreferences.set(0.0);
+    toggleFullscreen.set(0.0);
+
+    EXPECT_EQ(quitSpy.count(), 0);
+    EXPECT_EQ(preferencesSpy.count(), 0);
+    EXPECT_EQ(fullscreenSpy.count(), 0);
+
+    quit.set(1.0);
+    showPreferences.set(1.0);
+    toggleFullscreen.set(1.0);
+
+    EXPECT_EQ(quitSpy.count(), 1);
+    EXPECT_EQ(preferencesSpy.count(), 1);
+    EXPECT_EQ(fullscreenSpy.count(), 1);
+    EXPECT_DOUBLE_EQ(quit.get(), 0.0);
+    EXPECT_DOUBLE_EQ(showPreferences.get(), 0.0);
+    EXPECT_DOUBLE_EQ(toggleFullscreen.get(), 0.0);
+}
+
+TEST_F(ControlObjectAliasTest, SkinControlActionAvailability) {
+    auto skinControls = SkinControls();
+
+    auto quitAvailable =
+            ControlProxy(ConfigKey(kSkinGroup, QStringLiteral("quit_available")));
+    auto showPreferencesAvailable = ControlProxy(
+            ConfigKey(kSkinGroup, QStringLiteral("show_preferences_available")));
+    auto toggleFullscreenAvailable = ControlProxy(
+            ConfigKey(kSkinGroup, QStringLiteral("toggle_fullscreen_available")));
+
+    EXPECT_DOUBLE_EQ(quitAvailable.get(), 1.0);
+    EXPECT_DOUBLE_EQ(showPreferencesAvailable.get(), 1.0);
+    EXPECT_DOUBLE_EQ(toggleFullscreenAvailable.get(), 1.0);
+
+    quitAvailable.set(0.0);
+    showPreferencesAvailable.set(0.0);
+    toggleFullscreenAvailable.set(0.0);
+
+    EXPECT_DOUBLE_EQ(quitAvailable.get(), 1.0);
+    EXPECT_DOUBLE_EQ(showPreferencesAvailable.get(), 1.0);
+    EXPECT_DOUBLE_EQ(toggleFullscreenAvailable.get(), 1.0);
 }
 
 } // namespace

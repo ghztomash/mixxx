@@ -17,6 +17,10 @@ class QmlDlgPreferencesProxy : public QObject {
             std::shared_ptr<QDialog> pDlgPreferences,
             QObject* parent = nullptr);
 
+    /// Returns whether the preferences dialog is currently visible.
+    bool isVisible() const;
+    /// Closes the preferences dialog.
+    void close();
     Q_INVOKABLE void show();
 
     static QmlDlgPreferencesProxy* create(QQmlEngine* pQmlEngine, QJSEngine* pJsEngine);
